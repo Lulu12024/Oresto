@@ -1,126 +1,105 @@
 import json
 from channels.generic.websocket import AsyncWebsocketConsumer
-from channels.db import database_sync_to_async
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 
 
-class NotificationConsumer(AsyncWebsocketConsumer):
+class RestaurantConsumer(AsyncWebsocketConsumer):
     """
-    WebSocket consumer for real-time notifications.
-    Connects users to personal groups and role-based groups.
-    
-    ws://server/ws/notifications/
-    
-    Message types:
-    - new_order: nouvelle commande (pour cuisiniers)
-    - order_accepted: commande acceptée (pour serveurs)
-    - order_rejected: commande refusée (pour serveurs)
-    - order_ready: commande prête (pour serveurs)
-    - order_cancelled: commande annulée
-    - order_delivered: commande livrée
-    - stock_alert: alerte stock bas
-    - peremption_alert: alerte péremption
-    - mvt_validated: mouvement validé
-    - mvt_rejected: mouvement rejeté
+    WebSocket consumer — une room par restaurant.
+    URL: ws://host/ws/restaurant/<restaurant_id>/
     """
-
     async def connect(self):
-        self.user = self.scope.get('user')
+        self.restaurant_id = self.scope['url_route']['kwargs']['restaurant_id']
+        self.room_group_name = f'restaurant_{self.restaurant_id}'
 
-        if not self.user or not self.user.is_authenticated:
+        # Vérifier que l'utilisateur a accès à ce restaurant
+        user = self.scope.get('user')
+        if not user or not user.is_authenticated:
             await self.close()
             return
 
-        # Personal notification group
-        self.user_group = f'user_{self.user.id}'
-        await self.channel_layer.group_add(
-            self.user_group,
-            self.channel_name
-        )
+        user_restaurant_id = str(getattr(user, 'restaurant_id', None) or '')
+        is_super = getattr(user, 'is_super_admin', False)
 
-        # Role-based group
-        role_name = await self.get_user_role()
-        if role_name:
-            self.role_group = f'role_{role_name.lower().replace(" ", "_")}'
-            await self.channel_layer.group_add(
-                self.role_group,
-                self.channel_name
-            )
+        if not is_super and user_restaurant_id != self.restaurant_id:
+            await self.close()
+            return
 
-        # Global group for broadcast messages
-        self.global_group = 'global_notifications'
-        await self.channel_layer.group_add(
-            self.global_group,
-            self.channel_name
-        )
-
+        await self.channel_layer.group_add(self.room_group_name, self.channel_name)
         await self.accept()
 
-        # Send unread notification count on connect
-        count = await self.get_unread_count()
-        await self.send(text_data=json.dumps({
-            'type': 'connected',
-            'unread_count': count,
-        }))
-
     async def disconnect(self, close_code):
-        if hasattr(self, 'user_group'):
-            await self.channel_layer.group_discard(
-                self.user_group,
-                self.channel_name
-            )
-        if hasattr(self, 'role_group'):
-            await self.channel_layer.group_discard(
-                self.role_group,
-                self.channel_name
-            )
-        if hasattr(self, 'global_group'):
-            await self.channel_layer.group_discard(
-                self.global_group,
-                self.channel_name
-            )
+        await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
 
     async def receive(self, text_data):
-        """Handle incoming messages (e.g., mark notification as read)"""
+        # Ping/pong keepalive
         try:
             data = json.loads(text_data)
-            msg_type = data.get('type')
-
-            if msg_type == 'mark_read':
-                notification_id = data.get('notification_id')
-                if notification_id:
-                    await self.mark_notification_read(notification_id)
-                    await self.send(text_data=json.dumps({
-                        'type': 'notification_read',
-                        'notification_id': notification_id,
-                    }))
-        except json.JSONDecodeError:
+            if data.get('type') == 'ping':
+                await self.send(text_data=json.dumps({'type': 'pong'}))
+        except Exception:
             pass
 
-    async def notification_message(self, event):
-        """Handle notification messages sent to groups"""
+    # ── Event handlers (envoyés depuis le backend) ──────────────────
+
+    async def new_order(self, event):
         await self.send(text_data=json.dumps({
-            'type': 'notification',
-            'notification_type': event.get('notification_type', ''),
-            'message': event.get('message', ''),
-            'data': event.get('data', {}),
-            'created_at': event.get('created_at', ''),
+            'type': 'new_order',
+            'data': event['data'],
         }))
 
-    @database_sync_to_async
-    def get_user_role(self):
-        try:
-            return self.user.role.nom
-        except Exception:
-            return None
+    async def order_ready(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'order_ready',
+            'data': event['data'],
+        }))
 
-    @database_sync_to_async
-    def get_unread_count(self):
-        from commandes.models import Notification
-        return Notification.objects.filter(user=self.user, is_read=False).count()
+    async def order_accepted(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'order_accepted',
+            'data': event['data'],
+        }))
 
-    @database_sync_to_async
-    def mark_notification_read(self, notification_id):
-        from commandes.models import Notification
-        Notification.objects.filter(
-            id=notification_id, user=self.user
-        ).update(is_read=True)
+    async def order_rejected(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'order_rejected',
+            'data': event['data'],
+        }))
+
+    async def order_cancelled(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'order_cancelled',
+            'data': event['data'],
+        }))
+
+    async def stock_alert(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'stock_alert',
+            'data': event['data'],
+        }))
+
+    async def mvt_validated(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'mvt_validated',
+            'data': event['data'],
+        }))
+
+    async def notification(self, event):
+        await self.send(text_data=json.dumps({
+            'type': event.get('notification_type', 'notification'),
+            'data': event['data'],
+        }))
+
+
+def send_notification_to_restaurant(restaurant_id: str, event_type: str, data: dict):
+    """Envoie une notification WebSocket à tous les membres du restaurant."""
+    channel_layer = get_channel_layer()
+    group_name = f'restaurant_{restaurant_id}'
+    async_to_sync(channel_layer.group_send)(
+        group_name,
+        {
+            'type': event_type.replace('-', '_'),
+            'data': data,
+        }
+    )

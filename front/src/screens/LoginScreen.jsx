@@ -1,22 +1,21 @@
 import { useState } from "react";
 import { C } from "../styles/tokens";
+import { OrestoLogo, Card, Input, Btn } from "../components/ui";
 import { authService } from "../api/auth";
-import { MOCK_USERS } from "../mock";
-// import { Logo, Btn, Input, Spinner } from "../components/ui";
-import { Logo, Btn, Input, Spinner, Card, Divider } from "../components/ui";
 
-const LoginScreen = ({ onLogin, toast }) => {
-  const [login, setLogin]       = useState("");
+export default function LoginScreen({ onLogin, toast, onBack }) {
+  const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError]       = useState("");
-  const [loading, setLoading]   = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleSubmit = async () => {
-    if (!login) { setError("Veuillez saisir votre identifiant"); return; }
-    setError(""); setLoading(true);
+    if (!login || !password) return;
+    setLoading(true);
+    setError("");
     try {
-      const { user } = await authService.login(login, password || "demo");
-      toast.success("Bienvenue !", user.firstName || user.login);
+      const user = await authService.login(login, password);
+      toast?.success("Bienvenue !", user.firstName || user.login);
       onLogin(user);
     } catch (err) {
       setError(err.message || "Identifiants incorrects");
@@ -25,62 +24,115 @@ const LoginScreen = ({ onLogin, toast }) => {
     }
   };
 
-  return (
-    <div style={{ minHeight:"100vh", background:C.bg0, display:"flex", alignItems:"center", justifyContent:"center", position:"relative", overflow:"hidden" }}>
-      {/* Ambient glow */}
-      <div style={{ position:"absolute", width:700, height:700, borderRadius:"50%", background:`radial-gradient(circle,${C.gold}07 0%,transparent 70%)`, top:-150, left:-150, pointerEvents:"none" }}/>
-      <div style={{ position:"absolute", width:500, height:500, borderRadius:"50%", background:`radial-gradient(circle,${C.gold}05 0%,transparent 70%)`, bottom:0, right:0, pointerEvents:"none" }}/>
+  const handleKey = (e) => { if (e.key === "Enter") handleSubmit(); };
 
-      <div className="anim-fadeUp" style={{ width:"100%", maxWidth:420, padding:20 }}>
+  return (
+    <div style={{
+      minHeight: "100vh",
+      background: C.bg1,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      position: "relative",
+      overflow: "hidden",
+      padding: 20,
+    }}>
+      {/* Déco background */}
+      <div style={{
+        position: "absolute", width: 500, height: 500, borderRadius: "50%",
+        background: `radial-gradient(circle, ${C.gold}12 0%, transparent 70%)`,
+        top: -100, right: -100, pointerEvents: "none",
+      }} />
+      <div style={{
+        position: "absolute", width: 350, height: 350, borderRadius: "50%",
+        background: `radial-gradient(circle, ${C.gold}08 0%, transparent 70%)`,
+        bottom: -50, left: -50, pointerEvents: "none",
+      }} />
+
+      <div className="anim-fadeUp" style={{ width: "100%", maxWidth: 420, position: "relative" }}>
+
+        {/* Back to landing */}
+        {onBack && (
+          <button onClick={onBack} style={{
+            background: "none", border: "none", color: C.muted,
+            fontSize: 13, cursor: "pointer", marginBottom: 24,
+            display: "flex", alignItems: "center", gap: 6,
+            transition: "color .2s",
+          }}
+            onMouseEnter={e => e.target.style.color = C.gold}
+            onMouseLeave={e => e.target.style.color = C.muted}
+          >
+            ← Retour à l'accueil
+          </button>
+        )}
+
         {/* Logo */}
-        <div style={{ textAlign:"center", marginBottom:36 }}>
-          <div style={{ display:"flex", justifyContent:"center", marginBottom:18 }}><Logo size={88}/></div>
-          <h1 className="serif" style={{ fontSize:26, fontWeight:600, color:C.goldL, letterSpacing:4 }}>FATE & GRÂCE</h1>
-          <p style={{ fontSize:10, color:C.muted, letterSpacing:4, textTransform:"uppercase", marginTop:5 }}>Plateforme de Gestion</p>
+        <div style={{ textAlign: "center", marginBottom: 36 }}>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
+            <OrestoLogo size={56} withText />
+          </div>
+          <p style={{ fontSize: 13, color: C.muted, letterSpacing: .5 }}>
+            Connectez-vous à votre espace restaurant
+          </p>
         </div>
 
-        <Card style={{ padding:32, border:`1px solid ${C.goldBorder}` }}>
-          <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-            <Input label="Identifiant" value={login} onChange={setLogin} placeholder="votre.login" required/>
-            <Input label="Mot de passe" type="password" value={password} onChange={setPassword}
-              placeholder="••••••••" required style={{ letterSpacing:2 }}/>
+        {/* Formulaire */}
+        <div style={{
+          background: C.bg0,
+          border: `1px solid ${C.border}`,
+          borderRadius: 16,
+          padding: 32,
+          boxShadow: C.shadowMd,
+        }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+            <Input
+              label="Identifiant"
+              value={login}
+              onChange={setLogin}
+              placeholder="votre.identifiant"
+              required
+              onKeyDown={handleKey}
+            />
+            <Input
+              label="Mot de passe"
+              type="password"
+              value={password}
+              onChange={setPassword}
+              placeholder="••••••••"
+              required
+              style={{ letterSpacing: 2 }}
+              onKeyDown={handleKey}
+            />
 
             {error && (
-              <div style={{ background:C.dangerBg, border:`1px solid ${C.dangerBdr}`, borderRadius:8, padding:"9px 13px", fontSize:12, color:C.danger }}>
+              <div style={{
+                background: C.dangerBg,
+                border: `1px solid ${C.dangerBdr}`,
+                borderRadius: 8,
+                padding: "10px 14px",
+                fontSize: 12,
+                color: C.danger,
+                display: "flex", alignItems: "center", gap: 8,
+              }}>
                 ⚠ {error}
               </div>
             )}
 
-            <Btn onClick={handleSubmit} loading={loading} disabled={!login}
-              style={{ width:"100%", justifyContent:"center", padding:"13px 20px", fontSize:14, letterSpacing:1 }}>
+            <Btn
+              onClick={handleSubmit}
+              loading={loading}
+              disabled={!login || !password}
+              style={{ width: "100%", justifyContent: "center", padding: "13px 20px", fontSize: 14 }}
+            >
               Se connecter
             </Btn>
-
-            {/* <Divider label="Comptes de démonstration"/> */}
-
-            {/* <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:6 }}>
-              {Object.entries({ admin:"Admin", gérant:"Gérant", manager:"Manager", serveur:"Serveur", cuisinier:"Cuisinier", gestionnaire:"Gest. Stock" }).map(([role, label]) => (
-                <button key={role} onClick={()=>{ const u = MOCK_USERS.find(x=>x.role===role); if(u){ setLogin(u.login); setPassword("demo"); }}}
-                  style={{ background:C.bg3, border:`1px solid rgba(255,255,255,0.08)`, color:C.mutedL,
-                    borderRadius:7, padding:"6px 8px", fontSize:11, fontFamily:"'Raleway',sans-serif",
-                    cursor:"pointer", transition:"all .2s" }} className="hover-bg">
-                  {label}
-                </button>
-              ))}
-            </div> */}
           </div>
-        </Card>
+        </div>
 
-        <p style={{ textAlign:"center", fontSize:10, color:C.mutedD, marginTop:20, letterSpacing:.8 }}>
-          FATE & GRÂCE · v1.0 · 2026 &copy; Tous droits réservés
+        <p style={{ textAlign: "center", fontSize: 11, color: C.mutedL, marginTop: 24, letterSpacing: .5 }}>
+          Oresto · v2.0 · 2026 © Tous droits réservés
         </p>
       </div>
     </div>
   );
-};
-
-/* ══════════════════════════════════════════════════════════
-   DASHBOARD SCREEN
-   ══════════════════════════════════════════════════════════ */
-
-export default LoginScreen;
+}

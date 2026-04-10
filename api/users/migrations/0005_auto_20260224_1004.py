@@ -47,7 +47,7 @@ class Migration(migrations.Migration):
                 sexe='M',
                 date_embauche='2024-01-10',
                 role=role_admin,
-                is_superuser=True,
+                # is_superuser=True,
                 is_staff=True,
                 is_activite=True
             )
@@ -58,7 +58,7 @@ class Migration(migrations.Migration):
         pass
 
     dependencies = [
-        ('users', '0004_user_telephone'),
+        ('users', '0007_alter_permission_options_alter_role_options_and_more'),
     ]
 
     operations = [

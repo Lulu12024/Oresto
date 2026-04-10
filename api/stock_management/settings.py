@@ -1,9 +1,11 @@
+"""
+Oresto — Settings Django
+Plateforme SaaS multi-restaurant
+"""
+import json
 import os
 from pathlib import Path
 from datetime import timedelta
-import json
-import redis
-
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -16,30 +18,36 @@ DEBUG = True
 
 ALLOWED_HOSTS =  SECRETS['ALLOWED_HOSTS'].split(',')
 
+# ── Applications ──────────────────────────────────────────────────────
 INSTALLED_APPS = [
-    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+
+    # Tiers
     'rest_framework',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
-    'corsheaders',
-    'django_filters',
-    'drf_spectacular',
     'channels',
+    'django_filters',
+    'corsheaders',
+    'drf_spectacular',
+
+    # Apps Oresto
+    'restaurants',      
     'users',
     'commandes',
     'stocks',
     'audit',
+    'public_api',   
 ]
 
 MIDDLEWARE = [
-    'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',
+    'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -53,7 +61,7 @@ ROOT_URLCONF = 'stock_management.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates'],
+        'DIRS': [],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -69,6 +77,7 @@ TEMPLATES = [
 WSGI_APPLICATION = 'stock_management.wsgi.application'
 ASGI_APPLICATION = 'stock_management.asgi.application'
 
+# ── Base de données ───────────────────────────────────────────────────
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
@@ -80,151 +89,82 @@ DATABASES = {
     }
 }
 
-AUTH_PASSWORD_VALIDATORS = [
-    {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-    },
-]
-
-VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "")
-VAPID_PUBLIC_KEY  = os.environ.get("VAPID_PUBLIC_KEY", "")
-VAPID_CLAIMS      = {"sub": "mailto:admin@fateetgrace.com"}
-
-LANGUAGE_CODE = 'fr-fr'
-
-TIME_ZONE = 'Africa/Porto-Novo'
-
-USE_I18N = True
-
-USE_TZ = True
-
-STATIC_URL = 'static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'
-
-MEDIA_URL = 'media/'
-MEDIA_ROOT = BASE_DIR / 'media'
-
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
+# ── Auth ──────────────────────────────────────────────────────────────
 AUTH_USER_MODEL = 'users.User'
 
+AUTH_PASSWORD_VALIDATORS = [
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
+]
+
+# ── DRF ──────────────────────────────────────────────────────────────
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': (
+    'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework_simplejwt.authentication.JWTAuthentication',
-    ),
-    'DEFAULT_PERMISSION_CLASSES': (
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
-    ),
-    'DEFAULT_FILTER_BACKENDS': (
+    ],
+    'DEFAULT_FILTER_BACKENDS': [
         'django_filters.rest_framework.DjangoFilterBackend',
         'rest_framework.filters.SearchFilter',
         'rest_framework.filters.OrderingFilter',
-    ),
+    ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 20,
+    'PAGE_SIZE': 50,
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
-SESSION_COOKIE_AGE = 10800
-SESSION_EXPIRE_AT_BROWSER_CLOSE = False
-
+# ── JWT ───────────────────────────────────────────────────────────────
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=SECRETS['JWT_ACCESS_TOKEN_LIFETIME']),
-    'REFRESH_TOKEN_LIFETIME': timedelta(minutes=SECRETS['JWT_REFRESH_TOKEN_LIFETIME']),
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=8),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
     'UPDATE_LAST_LOGIN': True,
-    'ALGORITHM': 'HS256',
     'AUTH_HEADER_TYPES': ('Bearer',),
     'USER_ID_FIELD': 'id',
     'USER_ID_CLAIM': 'user_id',
 }
 
-# SIMPLE_JWT = {
-#     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=SECRETS['JWT_ACCESS_TOKEN_LIFETIME']),
-#     'REFRESH_TOKEN_LIFETIME': timedelta(minutes=SECRETS['JWT_REFRESH_TOKEN_LIFETIME']),
-#     'ROTATE_REFRESH_TOKENS': True,
-#     'BLACKLIST_AFTER_ROTATION': True,
-#     'UPDATE_LAST_LOGIN': True,
-#     'ALGORITHM': 'HS256',
-#     # 'SIGNING_KEY': SECRET_KEY,
-#     'AUTH_HEADER_TYPES': ('Bearer',),
-# }
-
-# {
-#     "KEY": "django-insecure-%ckybrzgg-oms^kg2^m*3sp)zgjzrjeg18ww7h+5k5u0l8#3=w",
-#     "SALT": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!#$%&'()*+,-./:;<=>?@[\\]^_`{|}~",
-#     "NAME": "stock_db",
-#     "USER": "postgres",
-#     "HOST": "localhost",
-#     "PORT": "5432",
-#     "PASS": "#!@dm1n!#",
-    
-    # "KEY": "django-insecure-%ckybrzgg-oms^kg2^m*3sp)zgjzrjeg18ww7h+5k5u0l8#3=w",
-    # "SALT": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!#$%&'()*+,-./:;<=>?@[\\]^_`{|}~",
-    # "NAME": "fate_and_grace_db",
-    # "USER": "fate_and_grace_db_user",
-    # "HOST": "dpg-d6n8p9rh46gs73c51uk0-a.oregon-postgres.render.com",
-    # "PORT": "5432",
-    # "PASS": "uh036kvrjN0zjQWJFYsFrifzjz62S9Fl",
-    
-
-#     "JWT_ACCESS_TOKEN_LIFETIME": 60,
-#     "JWT_REFRESH_TOKEN_LIFETIME": 1440,
-
-#     "REDIS_HOST": "localhost",
-#     "REDIS_PORT": 6379,
-#     "ALLOWED_HOSTS": "*"
-
-# }
-
-SPECTACULAR_SETTINGS = {
-    'TITLE': 'Stock Management API',
-    'DESCRIPTION': 'API de gestion des stocks pour restaurant',
-    'VERSION': '1.0.0',
-    'SERVE_INCLUDE_SCHEMA': False,
-}
-
-# CORS_ALLOWED_ORIGINS = [
-#     "http://localhost:3000",
-#     "http://localhost:8080",
-#     "http://127.0.0.1:3000",
-#     "http://127.0.0.1:8080",
-#     "http://localhost:5500",
-#     "http://127.0.0.1:5500",
-#     "http://10.64.10.53:3000",
-#     "https://fatandgracemanagement-front.onrender.com"
-# ]
-# CORS_ALLOWED_ORIGINS = [
-#     "https://fatandgracemanagement-front.onrender.com",
-# ]
-CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOW_ALL_ORIGINS = True  # Permettre toutes les origines (à restreindre en production)
-# En mode DEBUG, autoriser toutes les origines pour faciliter les tests
-# if DEBUG:
-#     CORS_ALLOW_ALL_ORIGINS = True
+# ── Channels / Redis ──────────────────────────────────────────────────
+REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379')
 
 CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
-            "hosts": [(SECRETS['REDIS_HOST'], SECRETS['REDIS_PORT'])],
+            'hosts': [REDIS_URL],
         },
     },
 }
 
-CELERY_BROKER_URL = f"redis://{SECRETS['REDIS_HOST']}:{SECRETS['REDIS_PORT']}/0"
-CELERY_RESULT_BACKEND = f"redis://{SECRETS['REDIS_HOST']}:{SECRETS['REDIS_PORT']}/0"
-CELERY_ACCEPT_CONTENT = ['application/json']
-CELERY_TASK_SERIALIZER = 'json'
-CELERY_RESULT_SERIALIZER = 'json'
-CELERY_TIMEZONE = TIME_ZONE
+# ── CORS ──────────────────────────────────────────────────────────────
+CORS_ALLOW_ALL_ORIGINS = DEBUG
+CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ORIGINS', 'http://localhost:3000,http://localhost:3001').split(',')
+CORS_ALLOW_CREDENTIALS = True
+
+# ── Spectacular (Swagger) ─────────────────────────────────────────────
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Oresto API',
+    'DESCRIPTION': 'API multi-tenant pour la gestion de restaurants',
+    'VERSION': '2.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+}
+
+# ── Internationalisation ──────────────────────────────────────────────
+LANGUAGE_CODE = 'fr-fr'
+TIME_ZONE = 'Africa/Porto-Novo'
+USE_I18N = True
+USE_TZ = True
+
+# ── Fichiers statiques ────────────────────────────────────────────────
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# ── QR Code settings ──────────────────────────────────────────────────
+QR_CODE_SIZE = 200  # px
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')

@@ -1,142 +1,62 @@
-from rest_framework import permissions
+from rest_framework.permissions import BasePermission
 
 
-class IsAdministrateur(permissions.BasePermission):
+def role_nom(user):
+    return (user.role.nom if user.role else '').lower()
+
+
+class IsServeurOrAbove(BasePermission):
     def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and \
-               request.user.role and request.user.role.nom == 'Administrateur'
+        return request.user.is_authenticated and request.user.is_activite
 
 
-class IsManager(permissions.BasePermission):
+class IsCuisinierOrAbove(IsServeurOrAbove):
+    pass
+
+
+class IsGerantOrAdmin(BasePermission):
+    ROLES = ['gérant', 'gestionnaire de stock', 'manager', 'administrateur']
     def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and \
-               request.user.role.nom == 'Manager'
+        return request.user.is_authenticated and role_nom(request.user) in self.ROLES
 
 
-class IsGerant(permissions.BasePermission):
+class IsManagerOrAdmin(BasePermission):
+    ROLES = ['manager', 'administrateur']
     def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and \
-               request.user.role.nom == 'Gérant'
+        return request.user.is_authenticated and role_nom(request.user) in self.ROLES
 
 
-class IsCuisinier(permissions.BasePermission):
+class IsAdministrateur(BasePermission):
     def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and \
-               request.user.role.nom == 'Cuisinier'
+        return request.user.is_authenticated and role_nom(request.user) == 'administrateur'
 
 
-class IsServeur(permissions.BasePermission):
+class IsAdminOrManager(BasePermission):
     def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and \
-               request.user.role.nom == 'Serveur'
+        return request.user.is_authenticated and role_nom(request.user) in ['administrateur', 'manager']
 
 
-class IsAuditeur(permissions.BasePermission):
+class CanManageUsers(BasePermission):
     def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and \
-               request.user.role.nom == 'Auditeur'
+        return request.user.is_authenticated and role_nom(request.user) in ['administrateur', 'manager']
 
 
-class IsGestionnaire(permissions.BasePermission):
+class CanViewStock(BasePermission):
+    ROLES = ['gérant', 'gestionnaire de stock', 'manager', 'administrateur', 'cuisinier']
     def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and \
-               request.user.role.nom == 'Gestionnaire de stock'
+        return request.user.is_authenticated and role_nom(request.user) in self.ROLES
 
 
-class IsAdminOrManager(permissions.BasePermission):
+class CanViewMovements(CanViewStock):
+    pass
+
+
+class IsGestionnaireOrGerantOrAdmin(BasePermission):
+    ROLES = ['gestionnaire de stock', 'gérant', 'manager', 'administrateur']
     def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and \
-               request.user.role.nom in ['Administrateur', 'Manager']
+        return request.user.is_authenticated and role_nom(request.user) in self.ROLES
 
 
-class IsManagerOrAdmin(permissions.BasePermission):
+class IsCuisinier(BasePermission):
     def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and \
-               request.user.role.nom in ['Manager', 'Administrateur']
-
-
-class IsManagerOrGerant(permissions.BasePermission):
-    def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and \
-               request.user.role.nom in ['Manager', 'Gérant']
-
-
-class IsGerantOrAdmin(permissions.BasePermission):
-    def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and \
-               request.user.role.nom in ['Gérant', 'Administrateur']
-
-
-class IsServeurOrGerantOrAdmin(permissions.BasePermission):
-    def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and \
-               request.user.role.nom in ['Serveur', 'Gérant', 'Administrateur']
-
-
-class IsCuisinierOrAdmin(permissions.BasePermission):
-    def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and \
-               request.user.role.nom in ['Cuisinier', 'Administrateur']
-
-
-class IsGestionnaireOrGerantOrAdmin(permissions.BasePermission):
-    def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and \
-               request.user.role.nom in ['Gestionnaire de stock', 'Gérant', 'Administrateur']
-
-
-class IsOwnerOrAdmin(permissions.BasePermission):
-    def has_object_permission(self, request, view, obj):
-        if request.user.role.nom == 'Administrateur':
-            return True
-        return obj == request.user
-
-
-class CanManageUsers(permissions.BasePermission):
-    def has_permission(self, request, view):
-        if not request.user or not request.user.is_authenticated:
-            return False
-        return request.user.role.nom in ['Administrateur', 'Manager']
-
-
-class CanViewStock(permissions.BasePermission):
-    """Cuisinier, Gestionnaire, Gerant, Manager, Auditeur, Admin"""
-    def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and \
-               request.user.role.nom in [
-                   'Cuisinier', 'Gestionnaire de stock', 'Gérant',
-                   'Manager', 'Auditeur', 'Administrateur'
-               ]
-
-
-class CanViewMovements(permissions.BasePermission):
-    """Gestionnaire, Gerant, Manager, Auditeur, Admin"""
-    def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and \
-               request.user.role.nom in [
-                   'Gestionnaire de stock', 'Gérant',
-                   'Manager', 'Auditeur', 'Administrateur'
-               ]
-
-
-class CanViewInvoices(permissions.BasePermission):
-    """Gerant, Manager, Auditeur, Admin"""
-    def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and \
-               request.user.role.nom in [
-                   'Gérant', 'Manager', 'Auditeur', 'Administrateur'
-               ]
-
-
-class CanViewReports(permissions.BasePermission):
-    """Gerant, Manager, Admin"""
-    def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and \
-               request.user.role.nom in ['Gérant', 'Manager', 'Administrateur']
-
-
-class CanViewAuditLogs(permissions.BasePermission):
-    """Manager, Auditeur, Admin"""
-    def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and \
-               request.user.role.nom in ['Manager', 'Auditeur', 'Administrateur']
+        return request.user.is_authenticated and role_nom(request.user) == 'cuisinier'

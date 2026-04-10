@@ -1,71 +1,49 @@
-import { useEffect, useState } from "react";
 import { C } from "../styles/tokens";
-import NotificationsPanel from "./NotificationsPanel";
 
-const Header = ({ title, subtitle, actions, onMenuToggle, user, onNavigate }) => {
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-
-  useEffect(() => {
-    const handler = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener("resize", handler);
-    return () => window.removeEventListener("resize", handler);
-  }, []);
-
+export default function Header({ title, subtitle, onMenuToggle, restaurant }) {
   return (
     <div style={{
-      background: C.bg1,
-      borderBottom: `1px solid rgba(255,255,255,0.05)`,
-      padding: isMobile ? "10px 16px" : "13px 28px",
-      display: "flex", alignItems: "center",
-      justifyContent: "space-between",
-      flexShrink: 0, gap: 8,
+      height: 60,
+      background: C.bg0,
+      borderBottom: `1px solid ${C.border}`,
+      display: "flex",
+      alignItems: "center",
+      padding: "0 24px",
+      gap: 16,
+      flexShrink: 0,
     }}>
-      {/* Gauche : hamburger (mobile) + titre */}
-      <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 10 : 0, minWidth: 0 }}>
-        {isMobile && (
-          <button
-            onClick={onMenuToggle}
-            style={{
-              background: "rgba(255,255,255,0.05)",
-              border: `1px solid rgba(255,255,255,0.08)`,
-              color: C.mutedL, borderRadius: 8,
-              width: 36, height: 36, fontSize: 16,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              cursor: "pointer", flexShrink: 0,
-            }}>
-            ☰
-          </button>
+      {/* Mobile menu toggle */}
+      <button onClick={onMenuToggle} style={{
+        display: "none",
+        background: "none", border: "none",
+        fontSize: 20, cursor: "pointer", color: C.textSub,
+        "@media (max-width:768px)": { display: "flex" },
+      }}>☰</button>
+
+      {/* Titres */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: C.text, lineHeight: 1.2 }}>{title}</div>
+        {subtitle && (
+          <div style={{ fontSize: 11, color: C.muted, marginTop: 2, letterSpacing: .3 }}>{subtitle}</div>
         )}
-        <div style={{ minWidth: 0 }}>
-          <h1
-            className="serif"
-            style={{
-              fontSize: isMobile ? 15 : 20,
-              fontWeight: 600, color: C.cream,
-              letterSpacing: .4,
-              whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-            }}>
-            {title}
-          </h1>
-          {subtitle && (
-            <p style={{
-              fontSize: isMobile ? 10 : 12,
-              color: C.muted, marginTop: 2,
-              whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-            }}>
-              {subtitle}
-            </p>
-          )}
-        </div>
       </div>
 
-      {/* Droite : actions + notifications */}
-      <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 12, flexShrink: 0 }}>
-        {actions}
-        <NotificationsPanel user={user} onNavigate={onNavigate} />
-      </div>
+      {/* Restaurant info */}
+      {restaurant && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8,
+          padding: "6px 12px",
+          background: C.goldBg,
+          border: `1px solid ${C.goldBorder}`,
+          borderRadius: 20,
+          flexShrink: 0,
+        }}>
+          <div style={{ width: 8, height: 8, borderRadius: "50%", background: restaurant.statut === 'actif' ? C.success : C.danger }} />
+          <span style={{ fontSize: 12, fontWeight: 600, color: C.goldD }}>
+            {restaurant.nom}
+          </span>
+        </div>
+      )}
     </div>
   );
-};
-
-export default Header;
+}

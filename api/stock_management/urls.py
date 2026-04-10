@@ -18,72 +18,41 @@ from audit.reports import ReportsViewSet
 # ==================== ROUTER ====================
 
 router = DefaultRouter()
-
-# Tables
 router.register(r'tables', TableViewSet, basename='table')
-
-# Orders
 router.register(r'orders', OrderViewSet, basename='order')
-
-# Plats (menu items)
 router.register(r'plats', PlatViewSet, basename='plat')
-
-# Products
 router.register(r'products', ProductViewSet, basename='product')
-
-# Movements
 router.register(r'movements', MovementViewSet, basename='movement')
-
-# Invoices
 router.register(r'invoices', InvoiceViewSet, basename='invoice')
-
-# Users
 router.register(r'users', UserViewSet, basename='user')
-
-# Roles & Permissions
 router.register(r'roles', RoleViewSet, basename='role')
 router.register(r'permissions', PermissionViewSet, basename='permission')
-
-# Audit Logs
 router.register(r'audit-logs', AuditLogViewSet, basename='audit-log')
-
-# Reports
 router.register(r'reports', ReportsViewSet, basename='report')
-
-# Notifications
 router.register(r'notifications', NotificationViewSet, basename='notification')
-
-# Stock (internal: unites, stocks, demandes)
 router.register(r'unites', UniteViewSet, basename='unite')
 router.register(r'stocks', StockViewSet, basename='stock')
 router.register(r'demandes', DemandeProduitViewSet, basename='demande-produit')
 
-# Legacy endpoints kept
-router.register(r'rapports', RapportViewSet, basename='rapport')
-router.register(r'formats-export', FormatExportViewSet, basename='format-export')
-
-
-# ==================== URL PATTERNS ====================
-
 urlpatterns = [
-    # Admin
     path('admin/', admin.site.urls),
 
-    # Auth
-    path('api/auth/login/', login, name='login'),
-    path('api/auth/logout/', logout, name='logout'),
-    path('api/auth/me/', me, name='me'),
+    # ── Auth ──────────────────────────────────────────────────────────
+    path('api/auth/login/',           login,           name='login'),
+    path('api/auth/logout/',          logout,          name='logout'),
+    path('api/auth/me/',              me,              name='me'),
     path('api/auth/change-password/', change_password, name='change-password'),
 
-    # All API endpoints via router
+    # ── API REST principale (filtrée par restaurant de l'user) ────────
     path('api/', include(router.urls)),
 
-    # API docs
-    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
-    path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
-]
+    # ── Administration Oresto (super admins uniquement) ───────────────
+    path('api/admin/', include('restaurants.urls')),
 
-# Serve static/media in debug mode
-if settings.DEBUG:
-    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    # ── API Publique — QR Code (sans authentification) ────────────────
+    path('api/public/', include('public_api.urls')),
+
+    # ── Schéma / Swagger ─────────────────────────────────────────────
+    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('api/docs/',   SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

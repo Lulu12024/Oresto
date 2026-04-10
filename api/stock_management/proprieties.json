@@ -1,7 +1,7 @@
 {
     "KEY": "django-insecure-%ckybrzgg-oms^kg2^m*3sp)zgjzrjeg18ww7h+5k5u0l8#3=w",
     "SALT": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!#$%&'()*+,-./:;<=>?@[\\]^_`{|}~",
-    "NAME": "stock_db",
+    "NAME": "oresto_db",
     "USER": "postgres",
     "HOST": "localhost",
     "PORT": "5432",

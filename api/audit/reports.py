@@ -9,7 +9,7 @@ from decimal import Decimal
 
 from commandes.models import Commande, Table, Facture
 from stocks.models import Produit, Stock, MouvementStock
-from users.permissions import CanViewReports
+# from users.permissions import CanViewReports
 
 
 class ReportsViewSet(viewsets.ViewSet):
@@ -20,7 +20,8 @@ class ReportsViewSet(viewsets.ViewSet):
     GET /api/reports/kpi/       -> KPIs de gestion
     GET /api/reports/export/    -> export CSV, Excel, PDF
     """
-    permission_classes = [IsAuthenticated, CanViewReports]
+    # permission_classes = [IsAuthenticated, CanViewReports]
+    permission_classes = [IsAuthenticated]
 
     @action(detail=False, methods=['get'])
     def dashboard(self, request):

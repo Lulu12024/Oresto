@@ -1,26 +1,29 @@
 /**
- * FATE & GRÂCE — Application Principale
- * Entry point léger : routing + état global uniquement.
+ * ORESTO — Application Principale
+ * Routing: Landing → Login → Dashboard | /scan/:token → QR Order
  */
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { injectGlobalCSS, C, TABLE_STATUS } from "./styles/tokens";
-import { useToast, useOfflineDetect, handleApiError, useLocalState } from "./hooks";
+import { injectGlobalCSS, C } from "./styles/tokens";
+import { useToast, useOfflineDetect, useLocalState } from "./hooks";
 import { authService } from "./api/auth";
 import { tablesService } from "./api/tables";
 import { ordersService } from "./api/orders";
 import { productsService, movementsService } from "./api/stock";
 import { invoicesService, usersService, auditService, reportsService, notificationsService, demandesService } from "./api/services";
-import { MOCK_TABLES, MOCK_ORDERS, MOCK_PRODUCTS, MOCK_MOVEMENTS, MOCK_INVOICES, MOCK_AUDIT, MOCK_USERS, MOCK_PLATS, ROLES } from "./mock";
-import { unwrap } from "./api/client";
-import { platsService } from "./api/plats"; 
+import { unwrap, getUser } from "./api/client";
+import { platsService } from "./api/plats";
 
-// Layout
+// ── Composants layout ──
 import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
-import { ToastContainer, OfflineBanner } from "./components/ui";
+import { ToastContainer, OfflineBanner, OrestoLogo, Spinner } from "./components/ui";
 
-// Screens
+// ── Écrans spéciaux ──
+import LandingPage from "./screens/LandingPage";
 import LoginScreen from "./screens/LoginScreen";
+import QROrderPage from "./screens/QROrderPage";
+
+// ── Écrans application ──
 import DashboardScreen from "./screens/DashboardScreen";
 import TablesScreen from "./screens/TablesScreen";
 import TableDetailScreen from "./screens/TableDetailScreen";
@@ -37,313 +40,215 @@ import AuditScreen from "./screens/AuditScreen";
 import StatsScreen from "./screens/StatsScreen";
 import PlatsScreen from "./screens/PlatsScreen";
 import DemandesScreen from "./screens/DemandesScreen";
-import { getUser } from "./api/client"; 
 import ImportScreen from "./screens/ImportScreen";
 
 export default function App() {
   useEffect(() => { injectGlobalCSS(); }, []);
 
-  // Auth state
+  // ── Détection QR scan (/scan/:token) ──────────────────────────────
+  const path = window.location.pathname;
+  const qrMatch = path.match(/^\/scan\/([a-f0-9-]{36})$/i);
+  if (qrMatch) {
+    return <QROrderPage qrToken={qrMatch[1]} />;
+  }
+
+  return <MainApp />;
+}
+
+function MainApp() {
+  const [appView, setAppView] = useLocalState("oresto_view", "landing"); // landing | login | app
   const [user, setUser] = useState(() => getUser());
-
-  // Navigation
-  const [screen, setScreen] = useLocalState("fg_screen", "dashboard");
+  const [screen, setScreen] = useLocalState("oresto_screen", "dashboard");
   const [collapsed, setCollapsed] = useState(false);
-  const [selTable, setSelTable]   = useState(null);
-
-  // ── RESPONSIVE : drawer mobile ──
+  const [selTable, setSelTable] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Toast
+  // Data
+  const [tables, setTables] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [movements, setMovements] = useState([]);
+  const [invoices, setInvoices] = useState([]);
+  const [plats, setPlats] = useState([]);
+  const [demandes, setDemandes] = useState([]);
+
   const { toasts, toast, removeToast } = useToast();
+  const { isOnline } = useOfflineDetect();
 
-  // Offline detection
-  const isOnline = useOfflineDetect(toast);
+  // Si un user existe en storage → aller directement à l'app
+  useEffect(() => {
+    if (user) setAppView("app");
+  }, []);
 
-  // Core data state (loaded from API, fallback to mock)
-  const [tables,    setTables]    = useState(MOCK_TABLES);
-  const [orders,    setOrders]    = useState(MOCK_ORDERS);
-  const [products,  setProducts]  = useState(MOCK_PRODUCTS);
-  const [movements, setMovements] = useState(MOCK_MOVEMENTS);
-  const [plats,     setPlats]     = useState(MOCK_PLATS);
-  const [demandes,  setDemandes]  = useState([]);
-  const [invoices,  setInvoices]  = useState(MOCK_INVOICES);
-
-  // Initial data load from API
+  // Chargement données
   useEffect(() => {
     if (!user) return;
-    Promise.all([
-      tablesService.list().then(d    => { if(d) setTables(unwrap(d)); }),
-      ordersService.list().then(d    => { if(d) setOrders(unwrap(d)); }),
-      productsService.list().then(d  => { if(d) setProducts(unwrap(d)); }),
-      movementsService.list().then(d => { if(d) setMovements(unwrap(d)); }),
-      platsService.list().then(d     => { if(d) setPlats(Array.isArray(d) ? d : (d.results ?? [])); }),
-      invoicesService.list().then(d  => { if(d) setInvoices(Array.isArray(d) ? d : (d.results ?? [])); }),
-      demandesService.list().then(d  => { if(d) setDemandes(Array.isArray(d) ? d : (d.results ?? [])); }),
-    ]).catch(() => {
-      // Mock data already set — graceful degradation
-    });
+    const load = async () => {
+      try {
+        const [t, o, p, m, i, pl, d] = await Promise.allSettled([
+          tablesService.list(),
+          ordersService.list(),
+          productsService.list(),
+          movementsService.list(),
+          invoicesService.list(),
+          platsService.list(),
+          demandesService.list(),
+        ]);
+        if (t.status === "fulfilled" && t.value) setTables(unwrap(t.value));
+        if (o.status === "fulfilled" && o.value) setOrders(unwrap(o.value));
+        if (p.status === "fulfilled" && p.value) setProducts(unwrap(p.value));
+        if (m.status === "fulfilled" && m.value) setMovements(unwrap(m.value));
+        if (i.status === "fulfilled" && i.value) setInvoices(unwrap(i.value));
+        if (pl.status === "fulfilled" && pl.value) setPlats(unwrap(pl.value));
+        if (d.status === "fulfilled" && d.value) setDemandes(unwrap(d.value));
+      } catch { /* mode offline */ }
+    };
+    load();
   }, [user]);
 
-  // WebSocket for real-time notifications
+  // WebSocket — room par restaurant
   useEffect(() => {
-    if (!user) return;
-    const cleanup = notificationsService.connectWebSocket((msg) => {
-      if (msg.type === "new_order")     toast.gold("Nouvelle commande",  `Table ${msg.data?.table_num}`);
-      if (msg.type === "order_ready")   toast.info("Commande prête",     `${msg.data?.order_id} — serveur notifié`);
-      if (msg.type === "stock_alert")   toast.warning("Alerte stock",    msg.data?.message);
-      if (msg.type === "mvt_validated") toast.success("Stock validé",    "Mouvement approuvé");
-      if (msg.type === "new_order") ordersService.list().then(d=>{ if(d) setOrders(unwrap(d)); }).catch(()=>{});
-    });
-    return cleanup;
-  }, [user]); // eslint-disable-line
-
-  useEffect(() => {
-    if (!user) return;
-    if (!("Notification" in window))  {console.log("************** Notification pas présent ********************"); return }; // navigateurupporte ne s pas
- 
-    if (Notification.permission === "default") {
-      // On attend 3 secondes après la connexion pour ne pas agresser l'utilisateur
-
-      console.log("************** Notification default ********************");
-
-      console.log("************** Notification granted ********************");
-          notificationsService.subscribePush();
-      // const timer = setTimeout(() => {
-      //   Notification.requestPermission().then((permission) => {
-      //     // if (permission === "granted") {
-      //     console.log("************** Notification granted ********************");
-      //       notificationsService.subscribePush();
-      //     // }
-      //   });
-      // }, 3000);
-      // return () => clearTimeout(timer);
-    }
- 
-    if (Notification.permission === "granted") {
-      // Permission déjà accordée (reconnexion) → re-s'abonner silencieusement
-      notificationsService.subscribePush();
-      console.log("************** Notification présent ********************");
-    }
+    if (!user || !user.restaurant) return;
+    const wsUrl = `${process.env.REACT_APP_WS_URL || "ws://localhost:8000/ws"}/restaurant/${user.restaurant.id}/`;
+    let ws;
+    try {
+      ws = new WebSocket(wsUrl);
+      ws.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data);
+          if (msg.type === "new_order") {
+            toast.info("Nouvelle commande", `Table ${msg.data?.table_num}`);
+            ordersService.list().then(d => d && setOrders(unwrap(d))).catch(() => {});
+          }
+          if (msg.type === "order_ready") {
+            toast.success("Commande prête", msg.data?.table_num ? `Table ${msg.data.table_num}` : "");
+          }
+          if (msg.type === "stock_alert") {
+            toast.warning("Alerte stock", msg.data?.message || "");
+          }
+        } catch {}
+      };
+    } catch {}
+    return () => ws?.close();
   }, [user]);
 
-  // Unauthorized handler
-  useEffect(() => {
-    const handler = () => { setUser(null); toast.error("Session expirée","Veuillez vous reconnecter."); };
-    window.addEventListener("fg:unauthorized", handler);
-    return () => window.removeEventListener("fg:unauthorized", handler);
-  }, []); // eslint-disable-line
-
-  const notifCount = useMemo(() =>
-    orders.filter(o=>o.status==="EN_ATTENTE_ACCEPTATION").length +
-    products.filter(p=>p.qte<p.seuil).length +
-    movements.filter(m=>m.statut==="EN_ATTENTE").length
-  , [orders, products, movements]);
-
-  const handleLogin  = (u) => { setUser(u); setScreen("dashboard"); };
-  const handleLogout = ()  => { authService.logout(); setUser(null); setScreen("dashboard"); };
-  const handleNav    = (s) => {
-    setScreen(s);
-    setSelTable(null);
-    setSidebarOpen(false); // ferme le drawer sur mobile après navigation
-  };
-
+  const handleLogin = (u) => { setUser(u); setAppView("app"); setScreen("dashboard"); };
+  const handleLogout = () => { authService.logout(); setUser(null); setAppView("landing"); };
+  const handleNav = (s) => { setScreen(s); setSelTable(null); setSidebarOpen(false); };
   const handleSelTable = (t) => {
     setSelTable(t);
     setScreen("table-detail");
-    setSidebarOpen(false);
     ordersService.list({ table_id: t.id })
-      .then(d => {
-        if (d) {
-          const fresh = Array.isArray(d) ? d : (d.results ?? []);
-          setOrders(prev => [
-            ...prev.filter(o => (o.tableId ?? o.table_id) !== t.id),
-            ...fresh,
-          ]);
-        }
-      })
+      .then(d => d && setOrders(prev => [...prev.filter(o => (o.table_id || o.tableId) !== t.id), ...unwrap(d)]))
       .catch(() => {});
   };
 
-  
-  const handleNotifNavigate = (notif) => {
-    const type = notif.type;
-    const data = notif.data || {};
-  
-    // ── Notifications liées aux commandes/tables ──
-    const ORDER_TYPES = [
-      "new_order", "order_ready", "order_accepted",
-      "order_rejected", "order_cancelled", "order_delivered",
-    ];
-  
-    if (ORDER_TYPES.includes(type)) {
-      // Cuisinier : "new_order" → aller en cuisine
-      const role = (user?.role || "").toLowerCase();
-      const isCuisinier = role.includes("cuisinier");
-  
-      if (type === "new_order" && isCuisinier) {
-        handleNav("kitchen");
-        return;
-      }
-  
-      // Pour tout le reste (serveur, gérant…) → ouvrir la page de détail de la table
-      const tableId  = data.table_id;
-      const tableNum = data.table_num;
-  
-      // Chercher dans les tables déjà chargées
-      let found = null;
-      if (tableId) {
-        found = tables.find(t => t.id === tableId);
-      }
-      if (!found && tableNum) {
-        found = tables.find(t =>
-          String(t.numero).trim().toLowerCase() === String(tableNum).trim().toLowerCase()
-        );
-      }
-  
-      if (found) {
-        // Table trouvée en mémoire → navigation directe
-        handleSelTable(found);
-      } else if (tableId) {
-        // Pas en mémoire → fetch depuis l'API puis naviguer
-        tablesService.get(tableId)
-          .then(t => {
-            if (t) handleSelTable(t);
-            else   handleNav("tables"); // fallback
-          })
-          .catch(() => handleNav("tables"));
-      } else {
-        // Aucune info de table → aller à la liste des tables
-        handleNav("tables");
-      }
-      return;
-    }
-  
-    // ── Notifications stock ──
-    if (type === "stock_alert" || type === "peremption_alert") {
-      handleNav("stock");
-      return;
-    }
-  
-    // ── Notifications mouvements ──
-    if (type === "mvt_validated" || type === "mvt_rejected") {
-      handleNav("stock-history");
-      return;
-    }
-    
-    if (type === "demande_stock")   { handleNav("demandes"); return; }
-    if (type === "demande_validee") { handleNav("stock-request"); return; }
-    if (type === "demande_rejetee") { handleNav("stock-request"); return; }
-    // ── Fallback : tableau de bord ──
-    handleNav("dashboard");
-  };
-  
-  if (!user) return (
-    <>
-      <LoginScreen onLogin={handleLogin} toast={toast}/>
-      <ToastContainer toasts={toasts} removeToast={removeToast}/>
-    </>
-  );
+  const notifCount = useMemo(() =>
+    orders.filter(o => o.statut === "EN_ATTENTE_ACCEPTATION").length +
+    products.filter(p => p.qte < p.seuil).length
+  , [orders, products]);
+
+  // ── Routing principal ─────────────────────────────────────────────
+  if (appView === "landing") {
+    return (
+      <>
+        <LandingPage onGoToLogin={() => setAppView("login")} />
+        <ToastContainer toasts={toasts} removeToast={removeToast} />
+      </>
+    );
+  }
+
+  if (appView === "login" || !user) {
+    return (
+      <>
+        <LoginScreen onLogin={handleLogin} toast={toast} onBack={() => setAppView("landing")} />
+        <ToastContainer toasts={toasts} removeToast={removeToast} />
+      </>
+    );
+  }
+
+  // ── Application restaurant ─────────────────────────────────────────
+  const role = (user?.role || "").toLowerCase()
+    .replace("gestionnaire de stock", "gestionnaire")
+    .replace("administrateur", "admin");
+
+  const sharedProps = { role, toast };
 
   const SCREEN_TITLES = {
-    dashboard:        "Tableau de bord",
-    tables:           "Gestion des tables",
-    kitchen:          "Cuisine",
-    orders:           "Commandes",
-    stock:            "Stock",
-    "stock-entries":  "Entrées de stock",
-    "stock-exits":    "Sorties de stock",
-    "stock-history":  "Historique des mouvements",
+    dashboard: "Tableau de bord",
+    tables: "Gestion des tables",
+    kitchen: "Cuisine",
+    orders: "Commandes",
+    stock: "Stock",
+    "stock-entries": "Entrées de stock",
+    "stock-exits": "Sorties de stock",
+    "stock-history": "Historique",
     "stock-validate": "Validation stock",
-    "stock-request":  "Demande de stock",
-    invoices:         "Factures",
-    reports:          "Rapports & KPI",
-    team:             "Équipe & Utilisateurs",
-    menu:             "Gestion du menu",
-    audit:            "Journal d'audit",
-    stats:            "Mes statistiques",
-    "table-detail":   `Table ${selTable?.numero || ""}`,
-    demandes:         "Demandes cuisiniers",
+    "stock-request": "Demande de stock",
+    invoices: "Factures",
+    reports: "Rapports & KPI",
+    team: "Équipe & Utilisateurs",
+    menu: "Gestion du menu",
+    audit: "Journal d'audit",
+    stats: "Mes statistiques",
+    "table-detail": `Table ${selTable?.numero || ""}`,
+    demandes: "Demandes cuisiniers",
   };
 
   const renderScreen = () => {
-    const normalizedRole = (user?.role || "")
-      .toLowerCase()
-      .replace("gestionnaire de stock", "gestionnaire")
-      .replace("administrateur", "admin")
-      .replace("gerant", "gérant");
-    const role = normalizedRole;
-    const sharedProps = { role, toast };
-
     if (screen === "table-detail" && selTable) {
-      // return <TableDetailScreen {...sharedProps} table={selTable} orders={orders} setOrders={setOrders} setTables={setTables} plats={plats}/>;
       const liveTable = tables.find(t => t.id === selTable?.id) ?? selTable;
-      return <TableDetailScreen {...sharedProps} table={liveTable} orders={orders} setOrders={setOrders} setTables={setTables} plats={plats}/>;
+      return <TableDetailScreen {...sharedProps} table={liveTable} orders={orders} setOrders={setOrders} setTables={setTables} plats={plats} />;
     }
-    switch(screen) {
-      case "dashboard":      return <DashboardScreen {...sharedProps} tables={tables} orders={orders} products={products} movements={movements}/>;
-      case "tables":         return <TablesScreen {...sharedProps} tables={tables} setTables={setTables} orders={orders} onSelectTable={handleSelTable}/>;
-      case "kitchen":        return <KitchenScreen {...sharedProps} orders={orders} setOrders={setOrders} products={products} movements={movements} setMovements={setMovements} demandes={demandes} setDemandes={setDemandes}/>;
-      case "orders":         return <OrdersListScreen {...sharedProps} orders={orders} setOrders={setOrders} tables={tables}/>;
-      case "stock":          return <StockScreen {...sharedProps} products={products} setProducts={setProducts} movements={movements} setMovements={setMovements}/>;
-      case "stock-entries":  return <StockEntriesScreen {...sharedProps} products={products} movements={movements} setMovements={setMovements}/>;
-      case "stock-exits":    return <MovementsScreen {...sharedProps} movements={movements} setMovements={setMovements} products={products} typeFilter="SUPPRESSION"/>;
-      case "stock-history":  return <MovementsScreen {...sharedProps} movements={movements} setMovements={setMovements} products={products} typeFilter="ALL"/>;
-      case "stock-validate": return <MovementsScreen {...sharedProps} movements={movements} setMovements={setMovements} products={products} typeFilter="ALL"/>;
-      case "stock-request":  return <StockRequestScreen {...sharedProps} products={products} movements={movements} setMovements={setMovements}/>;
-      case "invoices":       return <InvoicesScreen {...sharedProps}/>;
-      case "reports":        return <ReportsScreen {...sharedProps} orders={orders} products={products} movements={movements} invoices={invoices}/>;
-      case "team":           return <TeamScreen {...sharedProps}/>;
-      case "audit":          return <AuditScreen {...sharedProps}/>;
-      case "stats":          return <StatsScreen {...sharedProps} orders={orders}/>;
-      case "demandes":       return <DemandesScreen {...sharedProps}/>;
-      case "menu":           return <PlatsScreen role={role} toast={toast} plats={plats} setPlats={setPlats}/>;
-      case "import":         return <ImportScreen {...sharedProps}  setProducts={setProducts} setMovements={setMovements} setPlats={setPlats}/>;
-      default:               return <DashboardScreen {...sharedProps} tables={tables} orders={orders} products={products} movements={movements}/>;
+    switch (screen) {
+      case "dashboard":      return <DashboardScreen {...sharedProps} tables={tables} orders={orders} products={products} movements={movements} />;
+      case "tables":         return <TablesScreen {...sharedProps} tables={tables} setTables={setTables} orders={orders} onSelectTable={handleSelTable} />;
+      case "kitchen":        return <KitchenScreen {...sharedProps} orders={orders} setOrders={setOrders} products={products} movements={movements} setMovements={setMovements} demandes={demandes} setDemandes={setDemandes} />;
+      case "orders":         return <OrdersListScreen {...sharedProps} orders={orders} setOrders={setOrders} tables={tables} />;
+      case "stock":          return <StockScreen {...sharedProps} products={products} setProducts={setProducts} movements={movements} setMovements={setMovements} />;
+      case "stock-entries":  return <StockEntriesScreen {...sharedProps} products={products} movements={movements} setMovements={setMovements} />;
+      case "stock-exits":    return <MovementsScreen {...sharedProps} movements={movements} setMovements={setMovements} products={products} typeFilter="SUPPRESSION" />;
+      case "stock-history":  return <MovementsScreen {...sharedProps} movements={movements} setMovements={setMovements} products={products} typeFilter="ALL" />;
+      case "stock-request":  return <StockRequestScreen {...sharedProps} products={products} movements={movements} setMovements={setMovements} />;
+      case "invoices":       return <InvoicesScreen {...sharedProps} />;
+      case "reports":        return <ReportsScreen {...sharedProps} orders={orders} products={products} movements={movements} />;
+      case "team":           return <TeamScreen {...sharedProps} />;
+      case "audit":          return <AuditScreen {...sharedProps} />;
+      case "stats":          return <StatsScreen {...sharedProps} orders={orders} />;
+      case "demandes":       return <DemandesScreen {...sharedProps} />;
+      case "menu":           return <PlatsScreen role={role} toast={toast} plats={plats} setPlats={setPlats} />;
+      case "import":         return <ImportScreen {...sharedProps} setProducts={setProducts} setMovements={setMovements} setPlats={setPlats} />;
+      default:               return <DashboardScreen {...sharedProps} tables={tables} orders={orders} products={products} movements={movements} />;
     }
   };
 
   return (
-    <div style={{ display:"flex", height:"100vh", overflow:"hidden" }}>
+    <div style={{ display: "flex", height: "100vh", overflow: "hidden", background: C.bg1 }}>
       <Sidebar
-        role={user.role} screen={screen} onNav={handleNav}
-        user={user} onLogout={handleLogout}
-        collapsed={collapsed} setCollapsed={setCollapsed}
+        role={role}
+        screen={screen}
+        onNav={handleNav}
+        user={user}
+        onLogout={handleLogout}
+        collapsed={collapsed}
+        setCollapsed={setCollapsed}
         notifCount={notifCount}
         mobileOpen={sidebarOpen}
         onMobileClose={() => setSidebarOpen(false)}
       />
-      <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden", minWidth:0 }}>
-        <OfflineBanner isOnline={isOnline}/>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
+        <OfflineBanner isOnline={isOnline} />
         <Header
           title={SCREEN_TITLES[screen] || ""}
-          subtitle={
-            screen === "table-detail" && selTable
-              ? `${TABLE_STATUS[selTable.status]?.label || ""} · ${selTable.capacite} couverts`
-              : new Date().toLocaleDateString("fr-FR", { weekday:"long", day:"numeric", month:"long", year:"numeric" })
-          }
-          user={user}    
-          onNavigate={handleNotifNavigate}                                      // ← NOUVEAU : pour les notifications
-          onMenuToggle={() => setSidebarOpen(o => !o)}
-          actions={
-            screen === "table-detail" && (
-              <button
-                onClick={() => { setScreen("tables"); setSelTable(null); }}
-                style={{
-                  background: C.bg3, border:`1px solid rgba(255,255,255,0.08)`,
-                  color: C.mutedL, borderRadius: 8, padding:"7px 14px",
-                  fontSize: 12, fontFamily:"'Raleway',sans-serif", cursor:"pointer",
-                }}>
-                ← Retour aux tables
-              </button>
-            )
-          }
+          subtitle={screen === "table-detail" && selTable ? `${selTable.statut}` : ""}
+          onMenuToggle={() => setSidebarOpen(true)}
+          restaurant={user?.restaurant}
         />
-        <div style={{ flex:1, overflowY:"auto", background:C.bg0 }}>
+        <main style={{ flex: 1, overflow: "auto", padding: 24 }}>
           {renderScreen()}
-        </div>
+        </main>
       </div>
-      <ToastContainer toasts={toasts} removeToast={removeToast}/>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
     </div>
   );
 }

@@ -10,7 +10,7 @@ import io
 
 from .models import LogAudit, Rapport, FormatExport
 from .serializers import AuditLogSerializer, RapportSerializer, FormatExportSerializer
-from users.permissions import CanViewAuditLogs
+# from users.permissions import CanViewAuditLogs
 
 
 class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
@@ -20,7 +20,8 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     """
     queryset = LogAudit.objects.select_related('user').all()
     serializer_class = AuditLogSerializer
-    permission_classes = [IsAuthenticated, CanViewAuditLogs]
+    # permission_classes = [IsAuthenticated, CanViewAuditLogs]
+    permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     search_fields = ['description', 'type_action']
     ordering_fields = ['date_action', 'heure_action']

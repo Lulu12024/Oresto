@@ -17,31 +17,25 @@ class PermissionAdmin(admin.ModelAdmin):
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
-    list_display = ['login', 'first_name', 'last_name', 'email', 'role', 'is_activite', 'date_joined']
-    list_filter = ['role', 'is_activite', 'is_deleted', 'date_joined']
+    list_display  = ['login', 'first_name', 'last_name', 'email', 'role', 'is_activite', 'date_joined']
+    list_filter   = ['role', 'is_activite', 'date_joined']   # ← is_deleted retiré
     search_fields = ['login', 'first_name', 'last_name', 'email']
-    ordering = ['-date_joined']
+    ordering      = ['-date_joined']
+
+    # ← filter_horizontal vidé (groups/user_permissions n'existent pas sur ce modèle)
+    filter_horizontal = ()
 
     fieldsets = (
-        ('Informations de connexion', {
-            'fields': ('login', 'password')
-        }),
-        ('Informations personnelles', {
-            'fields': ('first_name', 'last_name', 'date_de_naissance', 'sexe', 'email', 'date_embauche')
-        }),
-        ('Permissions', {
-            'fields': ('role', 'permissions', 'is_activite', 'is_deleted', 'is_staff', 'is_superuser')
-        }),
-        ('Dates importantes', {
-            'fields': ('last_login', 'date_joined')
-        }),
+        ('Connexion',            {'fields': ('login', 'password')}),
+        ('Infos personnelles',   {'fields': ('first_name', 'last_name', 'date_de_naissance', 'sexe', 'email', 'telephone', 'date_embauche')}),
+        ('Rôle & accès',         {'fields': ('role', 'is_activite', 'is_staff', 'is_superuser')}),
+        ('Dates',                {'fields': ('last_login', 'date_joined')}),
     )
 
     add_fieldsets = (
         (None, {
             'classes': ('wide',),
-            'fields': ('login', 'password1', 'password2', 'first_name', 'last_name',
-                      'date_de_naissance', 'sexe', 'role'),
+            'fields': ('login', 'password1', 'password2', 'first_name', 'last_name', 'role'),
         }),
     )
 
