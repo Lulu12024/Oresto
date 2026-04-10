@@ -15,6 +15,9 @@ from stocks.views import ProductViewSet, UniteViewSet, StockViewSet, MovementVie
 from audit.views import AuditLogViewSet, RapportViewSet, FormatExportViewSet
 from audit.reports import ReportsViewSet
 
+# Restaurant views
+from restaurants.views import public_plans, my_restaurant
+
 # ==================== ROUTER ====================
 
 router = DefaultRouter()
@@ -45,6 +48,12 @@ urlpatterns = [
 
     # ── API REST principale (filtrée par restaurant de l'user) ────────
     path('api/', include(router.urls)),
+
+    # ── Plans publics (landing page — sans auth) ──────────────────────
+    path('api/plans/', public_plans, name='public-plans'),
+
+    # ── Paramètres restaurant (admin du restaurant) ───────────────────
+    path('api/restaurant/my/', my_restaurant, name='my-restaurant'),
 
     # ── Administration Oresto (super admins uniquement) ───────────────
     path('api/admin/', include('restaurants.urls')),

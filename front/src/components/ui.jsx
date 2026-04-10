@@ -260,15 +260,15 @@ export const ToastContainer = ({ toasts, removeToast }) => (
    OFFLINE BANNER
    ══════════════════════════════════════ */
 export const OfflineBanner = ({ isOnline }) => {
-  if (isOnline) return null;
-  return (
-    <div style={{
-      background: C.warningBg, borderBottom: `1px solid ${C.warningBdr}`,
-      padding: "8px 20px", fontSize: 12, color: C.warning, textAlign: "center", fontWeight: 500,
-    }}>
-      ⚠ Mode hors-ligne — Les données affichées peuvent ne pas être à jour
-    </div>
-  );
+  // if (isOnline) return null;
+  // return (
+  //   <div style={{
+  //     background: C.warningBg, borderBottom: `1px solid ${C.warningBdr}`,
+  //     padding: "8px 20px", fontSize: 12, color: C.warning, textAlign: "center", fontWeight: 500,
+  //   }}>
+  //     ⚠ Mode hors-ligne — Les données affichées peuvent ne pas être à jour
+  //   </div>
+  // );
 };
 
 /* ══════════════════════════════════════

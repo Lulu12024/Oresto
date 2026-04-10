@@ -1,145 +1,151 @@
-/**
- * ORESTO — Application Principale
- * Routing: Landing → Login → Dashboard | /scan/:token → QR Order
- */
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { injectGlobalCSS, C } from "./styles/tokens";
-import { useToast, useOfflineDetect, useLocalState } from "./hooks";
+import { useState, useEffect, useMemo } from "react";
+import { injectGlobalCSS } from "./styles/tokens";
 import { authService } from "./api/auth";
+import { unwrap, getUser } from "./api/client";   // getUser vient de client, PAS de auth
+import { useToast, useOfflineDetect, useLocalState } from "./hooks";
 import { tablesService } from "./api/tables";
 import { ordersService } from "./api/orders";
 import { productsService, movementsService } from "./api/stock";
-import { invoicesService, usersService, auditService, reportsService, notificationsService, demandesService } from "./api/services";
-import { unwrap, getUser } from "./api/client";
+import { invoicesService } from "./api/services";
 import { platsService } from "./api/plats";
 
-// ── Composants layout ──
-import Sidebar from "./components/Sidebar";
-import Header from "./components/Header";
-import { ToastContainer, OfflineBanner, OrestoLogo, Spinner } from "./components/ui";
-
-// ── Écrans spéciaux ──
-import LandingPage from "./screens/LandingPage";
-import LoginScreen from "./screens/LoginScreen";
-import QROrderPage from "./screens/QROrderPage";
-
-// ── Écrans application ──
-import DashboardScreen from "./screens/DashboardScreen";
-import TablesScreen from "./screens/TablesScreen";
-import TableDetailScreen from "./screens/TableDetailScreen";
-import KitchenScreen from "./screens/KitchenScreen";
-import OrdersListScreen from "./screens/OrdersListScreen";
-import StockScreen from "./screens/StockScreen";
+import LandingPage        from "./screens/LandingPage";
+import LoginScreen        from "./screens/LoginScreen";
+import QROrderPage        from "./screens/QROrderPage";
+import DashboardScreen    from "./screens/DashboardScreen";
+import TablesScreen       from "./screens/TablesScreen";
+import TableDetailScreen  from "./screens/TableDetailScreen";
+import KitchenScreen      from "./screens/KitchenScreen";
+import OrdersListScreen   from "./screens/OrdersListScreen";
+import StockScreen        from "./screens/StockScreen";
 import StockEntriesScreen from "./screens/StockEntriesScreen";
-import MovementsScreen from "./screens/MovementsScreen";
+import MovementsScreen    from "./screens/MovementsScreen";
 import StockRequestScreen from "./screens/StockRequestScreen";
-import InvoicesScreen from "./screens/InvoicesScreen";
-import ReportsScreen from "./screens/ReportsScreen";
-import TeamScreen from "./screens/TeamScreen";
-import AuditScreen from "./screens/AuditScreen";
-import StatsScreen from "./screens/StatsScreen";
-import PlatsScreen from "./screens/PlatsScreen";
-import DemandesScreen from "./screens/DemandesScreen";
-import ImportScreen from "./screens/ImportScreen";
+import InvoicesScreen     from "./screens/InvoicesScreen";
+import ReportsScreen      from "./screens/ReportsScreen";
+import TeamScreen         from "./screens/TeamScreen";
+import AuditScreen        from "./screens/AuditScreen";
+import StatsScreen        from "./screens/StatsScreen";
+import PlatsScreen        from "./screens/PlatsScreen";
+import DemandesScreen     from "./screens/DemandesScreen";
+import ImportScreen       from "./screens/ImportScreen";
+import SettingsScreen     from "./screens/SettingsScreen";
+
+import Sidebar from "./components/Sidebar";
+import Header  from "./components/Header";
+// OfflineBanner EST DANS ./components/ui — pas de fichier séparé
+import { ToastContainer, OfflineBanner } from "./components/ui";
+
+/**
+ * normalizeRole — convertit le rôle brut du backend en clé de navigation.
+ *
+ * Le backend Django renvoie role.nom tel quel depuis la BD :
+ *   "Serveur", "Cuisinier", "Gérant", "Gestionnaire de stock",
+ *   "Manager", "Auditeur", "Administrateur"
+ *
+ * On supprime les accents et on met tout en minuscule pour avoir
+ * des clés stables côté front, indépendantes de l'encodage.
+ */
+export function normalizeRole(rawRole) {
+  const r = (rawRole || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, ""); // é→e, è→e, ê→e…
+
+  if (r === "serveur")                         return "serveur";
+  if (r === "cuisinier")                       return "cuisinier";
+  if (r === "gerant")                          return "gerant";
+  if (r.includes("gestionnaire"))              return "gestionnaire";
+  if (r === "manager")                         return "manager";
+  if (r === "auditeur")                        return "auditeur";
+  if (r === "administrateur" || r === "admin") return "admin";
+
+  console.warn("[App] Rôle non reconnu :", rawRole, "→ fallback admin");
+  return "admin";
+}
 
 export default function App() {
   useEffect(() => { injectGlobalCSS(); }, []);
 
-  // ── Détection QR scan (/scan/:token) ──────────────────────────────
-  const path = window.location.pathname;
+  const path    = window.location.pathname;
   const qrMatch = path.match(/^\/scan\/([a-f0-9-]{36})$/i);
-  if (qrMatch) {
-    return <QROrderPage qrToken={qrMatch[1]} />;
-  }
+  if (qrMatch) return <QROrderPage qrToken={qrMatch[1]} />;
 
   return <MainApp />;
 }
 
 function MainApp() {
-  const [appView, setAppView] = useLocalState("oresto_view", "landing"); // landing | login | app
-  const [user, setUser] = useState(() => getUser());
-  const [screen, setScreen] = useLocalState("oresto_screen", "dashboard");
-  const [collapsed, setCollapsed] = useState(false);
-  const [selTable, setSelTable] = useState(null);
+  const [appView, setAppView]         = useLocalState("oresto_view", "landing");
+  const [user, setUser]               = useState(() => getUser());
+  const [screen, setScreen]           = useLocalState("oresto_screen", "dashboard");
+  const [collapsed, setCollapsed]     = useState(false);
+  const [selTable, setSelTable]       = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Data
-  const [tables, setTables] = useState([]);
-  const [orders, setOrders] = useState([]);
-  const [products, setProducts] = useState([]);
+  const [tables,    setTables]    = useState([]);
+  const [orders,    setOrders]    = useState([]);
+  const [products,  setProducts]  = useState([]);
   const [movements, setMovements] = useState([]);
-  const [invoices, setInvoices] = useState([]);
-  const [plats, setPlats] = useState([]);
-  const [demandes, setDemandes] = useState([]);
+  const [invoices,  setInvoices]  = useState([]);
+  const [plats,     setPlats]     = useState([]);
+  const [demandes,  setDemandes]  = useState([]);
 
   const { toasts, toast, removeToast } = useToast();
   const { isOnline } = useOfflineDetect();
 
-  // Si un user existe en storage → aller directement à l'app
-  useEffect(() => {
-    if (user) setAppView("app");
-  }, []);
+  // Si user stocké → aller directement à l'app
+  useEffect(() => { if (user) setAppView("app"); }, []);
 
-  // Chargement données
+  // Chargement données selon rôle
   useEffect(() => {
     if (!user) return;
-    const load = async () => {
-      try {
-        const [t, o, p, m, i, pl, d] = await Promise.allSettled([
-          tablesService.list(),
-          ordersService.list(),
-          productsService.list(),
-          movementsService.list(),
-          invoicesService.list(),
-          platsService.list(),
-          demandesService.list(),
-        ]);
-        if (t.status === "fulfilled" && t.value) setTables(unwrap(t.value));
-        if (o.status === "fulfilled" && o.value) setOrders(unwrap(o.value));
-        if (p.status === "fulfilled" && p.value) setProducts(unwrap(p.value));
-        if (m.status === "fulfilled" && m.value) setMovements(unwrap(m.value));
-        if (i.status === "fulfilled" && i.value) setInvoices(unwrap(i.value));
-        if (pl.status === "fulfilled" && pl.value) setPlats(unwrap(pl.value));
-        if (d.status === "fulfilled" && d.value) setDemandes(unwrap(d.value));
-      } catch { /* mode offline */ }
-    };
-    load();
+    const role = normalizeRole(user.role);
+
+    tablesService.list().then(d => d && setTables(unwrap(d))).catch(() => {});
+    platsService.list().then(d => d && setPlats(unwrap(d))).catch(() => {});
+
+    if (role !== "auditeur") {
+      ordersService.list().then(d => d && setOrders(unwrap(d))).catch(() => {});
+    }
+    if (["gerant", "gestionnaire", "manager", "admin"].includes(role)) {
+      productsService.list().then(d => d && setProducts(unwrap(d))).catch(() => {});
+      movementsService.list().then(d => d && setMovements(unwrap(d))).catch(() => {});
+    }
+    if (["gerant", "manager", "admin", "serveur"].includes(role)) {
+      invoicesService.list().then(d => d && setInvoices(unwrap(d))).catch(() => {});
+    }
   }, [user]);
 
-  // WebSocket — room par restaurant
+  // WebSocket
   useEffect(() => {
-    if (!user || !user.restaurant) return;
-    const wsUrl = `${process.env.REACT_APP_WS_URL || "ws://localhost:8000/ws"}/restaurant/${user.restaurant.id}/`;
+    if (!user) return;
     let ws;
     try {
-      ws = new WebSocket(wsUrl);
+      const wsBase = process.env.REACT_APP_WS_URL || "ws://localhost:8000/ws";
+      ws = new WebSocket(`${wsBase}/notifications/`);
       ws.onmessage = (e) => {
         try {
           const msg = JSON.parse(e.data);
-          if (msg.type === "new_order") {
-            toast.info("Nouvelle commande", `Table ${msg.data?.table_num}`);
-            ordersService.list().then(d => d && setOrders(unwrap(d))).catch(() => {});
-          }
-          if (msg.type === "order_ready") {
-            toast.success("Commande prête", msg.data?.table_num ? `Table ${msg.data.table_num}` : "");
-          }
-          if (msg.type === "stock_alert") {
-            toast.warning("Alerte stock", msg.data?.message || "");
-          }
+          if (msg.type === "new_order")   toast.info("Nouvelle commande", msg.data?.table_num ? `Table ${msg.data.table_num}` : "");
+          if (msg.type === "stock_alert") toast.warning("Alerte stock", msg.data?.message || "");
         } catch {}
       };
     } catch {}
     return () => ws?.close();
   }, [user]);
 
-  const handleLogin = (u) => { setUser(u); setAppView("app"); setScreen("dashboard"); };
-  const handleLogout = () => { authService.logout(); setUser(null); setAppView("landing"); };
-  const handleNav = (s) => { setScreen(s); setSelTable(null); setSidebarOpen(false); };
+  const handleLogin    = (u) => { setUser(u); setAppView("app"); setScreen("dashboard"); };
+  const handleLogout   = ()  => { authService.logout(); setUser(null); setAppView("landing"); };
+  const handleNav      = (s) => { setScreen(s); setSelTable(null); setSidebarOpen(false); };
   const handleSelTable = (t) => {
     setSelTable(t);
     setScreen("table-detail");
     ordersService.list({ table_id: t.id })
-      .then(d => d && setOrders(prev => [...prev.filter(o => (o.table_id || o.tableId) !== t.id), ...unwrap(d)]))
+      .then(d => d && setOrders(prev => [
+        ...prev.filter(o => (o.table_id || o.tableId) !== t.id),
+        ...unwrap(d),
+      ]))
       .catch(() => {});
   };
 
@@ -148,51 +154,34 @@ function MainApp() {
     products.filter(p => p.qte < p.seuil).length
   , [orders, products]);
 
-  // ── Routing principal ─────────────────────────────────────────────
-  if (appView === "landing") {
-    return (
-      <>
-        <LandingPage onGoToLogin={() => setAppView("login")} />
-        <ToastContainer toasts={toasts} removeToast={removeToast} />
-      </>
-    );
-  }
+  // ── Vues sans auth ────────────────────────────────────────────────────
+  if (appView === "landing") return (
+    <>
+      <LandingPage onGoToLogin={() => setAppView("login")} />
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+    </>
+  );
 
-  if (appView === "login" || !user) {
-    return (
-      <>
-        <LoginScreen onLogin={handleLogin} toast={toast} onBack={() => setAppView("landing")} />
-        <ToastContainer toasts={toasts} removeToast={removeToast} />
-      </>
-    );
-  }
+  if (appView === "login" || !user) return (
+    <>
+      <LoginScreen onLogin={handleLogin} toast={toast} onBack={() => setAppView("landing")} />
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+    </>
+  );
 
-  // ── Application restaurant ─────────────────────────────────────────
-  const role = (user?.role || "").toLowerCase()
-    .replace("gestionnaire de stock", "gestionnaire")
-    .replace("administrateur", "admin");
-
+  // ── App authentifiée ──────────────────────────────────────────────────
+  const role        = normalizeRole(user.role);
   const sharedProps = { role, toast };
 
   const SCREEN_TITLES = {
-    dashboard: "Tableau de bord",
-    tables: "Gestion des tables",
-    kitchen: "Cuisine",
-    orders: "Commandes",
-    stock: "Stock",
-    "stock-entries": "Entrées de stock",
-    "stock-exits": "Sorties de stock",
-    "stock-history": "Historique",
-    "stock-validate": "Validation stock",
-    "stock-request": "Demande de stock",
-    invoices: "Factures",
-    reports: "Rapports & KPI",
-    team: "Équipe & Utilisateurs",
-    menu: "Gestion du menu",
-    audit: "Journal d'audit",
-    stats: "Mes statistiques",
+    dashboard: "Tableau de bord", tables: "Gestion des tables", kitchen: "Cuisine",
+    orders: "Commandes", stock: "Stock", "stock-entries": "Entrées de stock",
+    "stock-exits": "Sorties de stock", "stock-history": "Historique",
+    "stock-validate": "Validation stock", "stock-request": "Demande de stock",
+    invoices: "Factures", reports: "Rapports & KPI", team: "Équipe & Utilisateurs",
+    menu: "Gestion du menu", audit: "Journal d'audit", stats: "Mes statistiques",
+    demandes: "Demandes cuisiniers", settings: "Paramètres du restaurant",
     "table-detail": `Table ${selTable?.numero || ""}`,
-    demandes: "Demandes cuisiniers",
   };
 
   const renderScreen = () => {
@@ -209,6 +198,7 @@ function MainApp() {
       case "stock-entries":  return <StockEntriesScreen {...sharedProps} products={products} movements={movements} setMovements={setMovements} />;
       case "stock-exits":    return <MovementsScreen {...sharedProps} movements={movements} setMovements={setMovements} products={products} typeFilter="SUPPRESSION" />;
       case "stock-history":  return <MovementsScreen {...sharedProps} movements={movements} setMovements={setMovements} products={products} typeFilter="ALL" />;
+      case "stock-validate": return <MovementsScreen {...sharedProps} movements={movements} setMovements={setMovements} products={products} typeFilter="ALL" />;
       case "stock-request":  return <StockRequestScreen {...sharedProps} products={products} movements={movements} setMovements={setMovements} />;
       case "invoices":       return <InvoicesScreen {...sharedProps} />;
       case "reports":        return <ReportsScreen {...sharedProps} orders={orders} products={products} movements={movements} />;
@@ -218,14 +208,15 @@ function MainApp() {
       case "demandes":       return <DemandesScreen {...sharedProps} />;
       case "menu":           return <PlatsScreen role={role} toast={toast} plats={plats} setPlats={setPlats} />;
       case "import":         return <ImportScreen {...sharedProps} setProducts={setProducts} setMovements={setMovements} setPlats={setPlats} />;
+      case "settings":       return <SettingsScreen {...sharedProps} user={user} setUser={setUser} />;
       default:               return <DashboardScreen {...sharedProps} tables={tables} orders={orders} products={products} movements={movements} />;
     }
   };
 
   return (
-    <div style={{ display: "flex", height: "100vh", overflow: "hidden", background: C.bg1 }}>
+    <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
       <Sidebar
-        role={role}
+        role={role}           // rôle déjà normalisé
         screen={screen}
         onNav={handleNav}
         user={user}

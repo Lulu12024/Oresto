@@ -42,33 +42,21 @@ class TableViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(restaurant=get_restaurant(self.request))
 
-    @action(detail=True, methods=['get'])
+    @action(detail=True, methods=['post'])
     def qr(self, request, pk=None):
-        """GET /api/tables/{id}/qr/ — génère le QR code PNG de la table"""
         table = self.get_object()
-        frontend_url = __import__('django.conf', fromlist=['settings']).settings.FRONTEND_URL
-        qr_url = f"{frontend_url}/scan/{table.qr_token}"
-
-        try:
-            qr = qrcode.QRCode(version=1, box_size=10, border=4)
-            qr.add_data(qr_url)
-            qr.make(fit=True)
-            img = qr.make_image(fill_color="#1a1a1a", back_color="white")
-            buf = io.BytesIO()
-            img.save(buf, format='PNG')
-            buf.seek(0)
-            response = HttpResponse(buf, content_type='image/png')
-            response['Content-Disposition'] = f'inline; filename="table-{table.numero}-qr.png"'
-            return response
-        except ImportError:
-            # Fallback si qrcode non installé : retourner l'URL
-            return Response({'qr_url': qr_url, 'qr_token': str(table.qr_token)})
+        qr_url = f"{request.scheme}://{request.get_host()}/scan/{table.qr_token}"
+        img = qrcode.make(qr_url)
+        buf = io.BytesIO()
+        img.save(buf, format='PNG')
+        buf.seek(0)
+        return HttpResponse(buf, content_type='image/png')
 
     @action(detail=True, methods=['get'])
     def qr_info(self, request, pk=None):
-        """GET /api/tables/{id}/qr_info/ — retourne les infos QR (token + URL)"""
-        table = self.get_object()
+        """GET /api/tables/{id}/qr_info/ — retourne le token et l'URL du QR code"""
         from django.conf import settings as conf_settings
+        table = self.get_object()
         frontend_url = getattr(conf_settings, 'FRONTEND_URL', 'http://localhost:3000')
         return Response({
             'table_id': table.id,
@@ -78,81 +66,11 @@ class TableViewSet(viewsets.ModelViewSet):
         })
 
     @action(detail=True, methods=['post'])
-    def reserve(self, request, pk=None):
-        table = self.get_object()
-        if table.statut != 'DISPONIBLE':
-            return Response({'detail': 'Table non disponible'}, status=400)
-        table.statut = 'RESERVEE'
-        table.date_ouverture = timezone.now()
-        table.save()
-        log_action(request.user, 'UPDATE', 'Réservation table',
-                   f"Table {table.numero} réservée", 'table', table.id, request)
-        return Response(TableSerializer(table).data)
-
-    @action(detail=True, methods=['post'])
-    def cancel(self, request, pk=None):
-        table = self.get_object()
-        if table.statut not in ['RESERVEE']:
-            return Response({'detail': 'Impossible d\'annuler cette table'}, status=400)
-        table.statut = 'DISPONIBLE'
-        table.date_ouverture = None
-        table.save()
-        log_action(request.user, 'UPDATE', 'Annulation réservation',
-                   f"Table {table.numero} annulée", 'table', table.id, request)
-        return Response(TableSerializer(table).data)
-
-    @action(detail=True, methods=['post'])
     def close(self, request, pk=None):
         table = self.get_object()
-        if table.statut not in ['EN_SERVICE']:
-            return Response({'detail': 'La table doit être EN_SERVICE'}, status=400)
-        table.statut = 'EN_ATTENTE_PAIEMENT'
-        table.date_cloture = timezone.now()
-        table.calculer_montant_total()
-        log_action(request.user, 'UPDATE', 'Clôture table',
-                   f"Table {table.numero} clôturée", 'table', table.id, request)
-        return Response(TableSerializer(table).data)
-
-    @action(detail=True, methods=['post'])
-    def pay(self, request, pk=None):
-        table = self.get_object()
-        if table.statut != 'EN_ATTENTE_PAIEMENT':
-            return Response({'detail': 'Table pas en attente de paiement'}, status=400)
-
-        mode = request.data.get('mode_paiement', 'especes')
-        montant = Decimal(str(request.data.get('montant', 0)))
-        pourboire = Decimal(str(request.data.get('pourboire', 0)))
-
-        total = table.calculer_montant_total()
-
-        # Générer numéro facture unique
-        from django.utils import timezone as tz
-        date_str = tz.now().strftime('%Y%m%d')
-        count = Facture.objects.filter(numero_facture__startswith=f'FAC-{date_str}').count() + 1
-        numero = f'FAC-{date_str}-{count:04d}'
-
-        commandes_table = table.commandes.filter(statut='EN_ATTENTE_PAIEMENT')
-        if table.date_ouverture:
-            commandes_table = commandes_table.filter(date_commande__gte=table.date_ouverture)
-
-        facture = Facture.objects.create(
-            numero_facture=numero,
-            table=table,
-            serveur=request.user,
-            montant_total=total,
-            montant_paye=montant,
-            pourboire=pourboire,
-            mode_paiement=mode,
-        )
-        facture.commandes.set(commandes_table)
-
-        commandes_table.update(statut='PAYEE', is_paid=True)
-        table.statut = 'PAYEE'
+        table.statut = 'DISPONIBLE'
         table.save()
-
-        log_action(request.user, 'CREATE', 'Paiement table',
-                   f"Table {table.numero} payée — Facture {numero}", 'facture', facture.id, request)
-        return Response({'facture': InvoiceSerializer(facture).data, 'table': TableSerializer(table).data})
+        return Response(TableSerializer(table).data)
 
 
 # ==================== PLAT ====================
@@ -163,8 +81,12 @@ class PlatViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         restaurant = get_restaurant(self.request)
         qs = Plat.objects.filter(restaurant=restaurant)
-        if self.request.query_params.get('disponible'):
-            qs = qs.filter(disponible=True)
+        cat = self.request.query_params.get('categorie')
+        if cat:
+            qs = qs.filter(categorie=cat)
+        search = self.request.query_params.get('search')
+        if search:
+            qs = qs.filter(nom__icontains=search)
         return qs.order_by('categorie', 'nom')
 
     def get_serializer_class(self):
@@ -179,82 +101,76 @@ class PlatViewSet(viewsets.ModelViewSet):
     def categories(self, request):
         restaurant = get_restaurant(request)
         cats = Plat.objects.filter(restaurant=restaurant).values_list('categorie', flat=True).distinct()
-        return Response(list(cats))
+        return Response(sorted(set(c for c in cats if c)))
 
 
 # ==================== ORDER ====================
 
 class OrderViewSet(viewsets.ModelViewSet):
+    serializer_class = OrderSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    ordering = ['-date_commande']
+    filterset_fields = ['statut', 'table']
+    search_fields = ['order_id']
+    ordering_fields = ['date_commande']
 
     def get_queryset(self):
         restaurant = get_restaurant(self.request)
-        qs = Commande.objects.select_related('table', 'serveur', 'cuisinier').filter(
-            table__restaurant=restaurant
-        )
-        if self.request.query_params.get('table_id'):
-            qs = qs.filter(table_id=self.request.query_params['table_id'])
-        if self.request.query_params.get('status'):
-            qs = qs.filter(statut=self.request.query_params['status'])
-        if self.request.query_params.get('cuisinier_id'):
-            qs = qs.filter(cuisinier_id=self.request.query_params['cuisinier_id'])
-        return qs
+        qs = Commande.objects.filter(table__restaurant=restaurant).select_related(
+            'table', 'serveur', 'cuisinier'
+        ).prefetch_related('commandeplat_set__plat')
+        table_id = self.request.query_params.get('table_id')
+        if table_id:
+            qs = qs.filter(table_id=table_id)
+        return qs.order_by('-date_commande', '-heure_commande')
 
-    def get_serializer_class(self):
-        if self.action == 'create':
-            return OrderCreateSerializer
-        return OrderSerializer
+    def perform_create(self, serializer):
+        serializer.save(serveur=self.request.user)
 
-    def create(self, request, *args, **kwargs):
-        restaurant = get_restaurant(request)
+    @action(detail=False, methods=['post'])
+    def create_order(self, request):
         serializer = OrderCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
+        restaurant = get_restaurant(request)
 
-        table = Table.objects.get(id=data['table_id'], restaurant=restaurant)
-        commande = Commande.objects.create(
-            table=table,
-            serveur=request.user,
-            observations=data.get('obs', ''),
-            statut='EN_ATTENTE_ACCEPTATION',
-            source='serveur',
-        )
+        table_id = serializer.validated_data['table_id']
+        items = serializer.validated_data['items']
+        obs = serializer.validated_data.get('obs', '')
 
-        total = Decimal('0.00')
-        items_text_parts = []
-        for item in data['items']:
-            plat = Plat.objects.get(id=item['plat_id'], restaurant=restaurant)
-            CommandePlat.objects.create(
-                commande=commande, plat=plat,
-                quantite=item['qte'], prix_unitaire=plat.prix,
+        try:
+            table = Table.objects.get(id=table_id, restaurant=restaurant)
+        except Table.DoesNotExist:
+            return Response({'detail': 'Table introuvable'}, status=404)
+
+        with transaction.atomic():
+            commande = Commande.objects.create(
+                table=table,
+                serveur=request.user,
+                observations=obs,
+                statut='EN_ATTENTE_ACCEPTATION',
+                source='serveur',
             )
-            total += plat.prix * item['qte']
-            items_text_parts.append(f"{item['qte']}× {plat.nom}")
+            total = Decimal('0.00')
+            for item in items:
+                try:
+                    plat = Plat.objects.get(id=item['plat_id'], restaurant=restaurant)
+                except Plat.DoesNotExist:
+                    commande.delete()
+                    return Response({'detail': f"Plat {item['plat_id']} introuvable"}, status=400)
+                qte = int(item.get('qte', 1))
+                CommandePlat.objects.create(
+                    commande=commande, plat=plat,
+                    quantite=qte, prix_unitaire=plat.prix,
+                )
+                total += plat.prix * qte
+            commande.prix_total = total
+            commande.save()
 
-        commande.prix_total = total
-        commande.save()
+            if table.statut == 'DISPONIBLE':
+                table.statut = 'RESERVEE'
+                table.save()
 
-        if table.statut in ['DISPONIBLE', 'RESERVEE']:
-            table.statut = 'EN_SERVICE'
-            table.date_ouverture = table.date_ouverture or timezone.now()
-            table.save()
-
-        # Notifier cuisiniers
-        from users.models import User
-        cuisiniers = User.objects.filter(restaurant=restaurant, role__nom='Cuisinier', is_activite=True)
-        items_text = ", ".join(items_text_parts)
-        for c in cuisiniers:
-            Notification.objects.create(
-                user=c, type='new_order',
-                titre=f"Nouvelle commande — Table {table.numero}",
-                message=items_text,
-                data={'order_id': commande.order_id, 'table_id': table.id, 'table_num': table.numero}
-            )
-
-        log_action(request.user, 'CREATE', 'Nouvelle commande',
-                   f"Commande {commande.order_id} — Table {table.numero}", 'commande', commande.id, request)
+        log_action(request.user, 'CREATE', 'Commande', f"Commande {commande.order_id}", 'commande', commande.id, request)
         return Response(OrderSerializer(commande).data, status=201)
 
     @action(detail=True, methods=['post'])
@@ -266,36 +182,17 @@ class OrderViewSet(viewsets.ModelViewSet):
         commande.cuisinier = request.user
         commande.date_acceptation = timezone.now()
         commande.save()
-        if commande.table.statut == 'COMMANDES_PASSEE':
-            commande.table.statut = 'EN_SERVICE'
-            commande.table.save()
-        if commande.serveur:
-            Notification.objects.create(
-                user=commande.serveur, type='order_accepted',
-                titre=f"Commande {commande.order_id} acceptée",
-                message=f"Le cuisinier {request.user.get_full_name()} a accepté la commande",
-                data={'order_id': commande.order_id, 'table_id': commande.table.id}
-            )
         return Response(OrderSerializer(commande).data)
 
     @action(detail=True, methods=['post'])
     def reject(self, request, pk=None):
         commande = self.get_object()
+        motif = request.data.get('motif', '')
         if commande.statut != 'EN_ATTENTE_ACCEPTATION':
             return Response({'detail': 'Statut invalide'}, status=400)
-        motif = request.data.get('motif', '')
-        if not motif:
-            return Response({'detail': 'Motif obligatoire'}, status=400)
-        commande.statut = 'REFUSEE'
+        commande.statut = 'REJETEE'
         commande.motif_rejet = motif
         commande.save()
-        if commande.serveur:
-            Notification.objects.create(
-                user=commande.serveur, type='order_rejected',
-                titre=f"Commande {commande.order_id} refusée",
-                message=f"Motif : {motif}",
-                data={'order_id': commande.order_id, 'table_id': commande.table.id}
-            )
         return Response(OrderSerializer(commande).data)
 
     @action(detail=True, methods=['post'])
@@ -331,7 +228,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         motif = request.data.get('motif', '')
         if not motif:
             return Response({'detail': 'Motif obligatoire'}, status=400)
-        role_nom = (commande.table.restaurant and request.user.role and request.user.role.nom) or ''
+        role_nom = (request.user.role.nom if request.user.role else '')
         if commande.statut == 'EN_ATTENTE_ACCEPTATION' and 'Serveur' in role_nom:
             pass
         elif commande.statut in ['EN_ATTENTE_ACCEPTATION', 'EN_PREPARATION'] and role_nom in ['Gérant', 'Manager', 'Administrateur']:
@@ -342,6 +239,50 @@ class OrderViewSet(viewsets.ModelViewSet):
         commande.motif_annulation = motif
         commande.save()
         return Response(OrderSerializer(commande).data)
+
+    @action(detail=True, methods=['post'])
+    def pay(self, request, pk=None):
+        """Enregistrer le paiement et générer la facture"""
+        commande = self.get_object()
+        if commande.statut != 'EN_ATTENTE_PAIEMENT':
+            return Response({'detail': 'Commande non en attente de paiement'}, status=400)
+
+        mode = request.data.get('mode_paiement', 'especes')
+        montant_paye = Decimal(str(request.data.get('montant_paye', commande.prix_total)))
+        pourboire = Decimal(str(request.data.get('pourboire', '0')))
+
+        with transaction.atomic():
+            commande.statut = 'PAYEE'
+            commande.is_paid = True
+            commande.date_paiement = timezone.now()
+            commande.save()
+
+            # Clôturer la table si toutes les commandes sont payées
+            table = commande.table
+            unpaid = Commande.objects.filter(
+                table=table,
+                statut__in=['EN_ATTENTE_ACCEPTATION', 'EN_PREPARATION', 'EN_ATTENTE_LIVRAISON', 'EN_ATTENTE_PAIEMENT']
+            ).exclude(id=commande.id).count()
+            if not unpaid:
+                table.statut = 'DISPONIBLE'
+                table.save()
+
+            # Générer la facture
+            import time
+            numero = f"FAC-{int(time.time())}-{commande.id}"
+            facture = Facture.objects.create(
+                numero_facture=numero,
+                table=commande.table,
+                serveur=request.user,
+                montant_total=commande.prix_total,
+                montant_paye=montant_paye,
+                pourboire=pourboire,
+                mode_paiement=mode,
+            )
+            facture.commandes.add(commande)
+
+        log_action(request.user, 'CREATE', 'Facture', f"Facture {numero}", 'facture', facture.id, request)
+        return Response({'facture_id': facture.id, 'numero': numero}, status=201)
 
 
 # ==================== INVOICE ====================
@@ -356,38 +297,44 @@ class InvoiceViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=True, methods=['get'])
     def pdf(self, request, pk=None):
+        """Génère le PDF de la facture avec en-tête du restaurant (logo, infos)."""
         facture = self.get_object()
-        # Générer PDF ticket (reprend la logique existante adaptée Oresto)
         restaurant = facture.table.restaurant
+
+        # Collecter les lignes de la facture
         items = []
         for commande in facture.commandes.all():
             for cp in commande.commandeplat_set.select_related('plat').all():
-                items.append({'nom': cp.plat.nom, 'qte': cp.quantite, 'prix': cp.prix_unitaire})
+                items.append({
+                    'nom': cp.plat.nom,
+                    'qte': cp.quantite,
+                    'prix': cp.prix_unitaire,
+                })
 
         try:
             from reportlab.pdfgen import canvas
             from reportlab.lib.units import mm
+
             buffer = io.BytesIO()
             TICKET_WIDTH = 80 * mm
-            TICKET_HEIGHT = 200 * mm
+            TICKET_HEIGHT = 250 * mm
             LH = 4 * mm
             MARGIN = 5 * mm
+
             p = canvas.Canvas(buffer, pagesize=(TICKET_WIDTH, TICKET_HEIGHT))
             y = TICKET_HEIGHT - MARGIN
 
             def center(text, size=8, bold=False):
                 nonlocal y
-                font = "Helvetica-Bold" if bold else "Helvetica"
-                p.setFont(font, size)
-                p.drawCentredString(TICKET_WIDTH / 2, y, text)
+                p.setFont("Helvetica-Bold" if bold else "Helvetica", size)
+                p.drawCentredString(TICKET_WIDTH / 2, y, str(text))
                 y -= LH * 1.2
 
             def row(left, right, size=7, bold=False):
                 nonlocal y
-                font = "Helvetica-Bold" if bold else "Helvetica"
-                p.setFont(font, size)
-                p.drawString(MARGIN, y, left)
-                p.drawRightString(TICKET_WIDTH - MARGIN, y, right)
+                p.setFont("Helvetica-Bold" if bold else "Helvetica", size)
+                p.drawString(MARGIN, y, str(left))
+                p.drawRightString(TICKET_WIDTH - MARGIN, y, str(right))
                 y -= LH
 
             def sep():
@@ -396,31 +343,83 @@ class InvoiceViewSet(viewsets.ReadOnlyModelViewSet):
                 p.drawCentredString(TICKET_WIDTH / 2, y, "- " * 22)
                 y -= LH
 
-            center(restaurant.nom.upper(), size=10, bold=True)
-            center("Plateforme Oresto", size=6)
+            # ── Logo du restaurant ──────────────────────────────────────
+            logo_url = restaurant.logo_url
+            if logo_url:
+                try:
+                    import urllib.request
+                    import io as io_mod
+                    from reportlab.lib.utils import ImageReader
+                    with urllib.request.urlopen(logo_url, timeout=3) as resp:
+                        logo_data = io_mod.BytesIO(resp.read())
+                    logo_img = ImageReader(logo_data)
+                    logo_w = 28 * mm
+                    logo_h = 14 * mm
+                    logo_x = (TICKET_WIDTH - logo_w) / 2
+                    p.drawImage(logo_img, logo_x, y - logo_h, width=logo_w, height=logo_h,
+                                preserveAspectRatio=True, mask='auto')
+                    y -= logo_h + LH * 0.5
+                except Exception:
+                    pass  # Logo indisponible → on continue
+
+            # ── En-tête restaurant ──────────────────────────────────────
+            center(restaurant.nom.upper(), size=11, bold=True)
+            if restaurant.adresse:
+                center(restaurant.adresse[:50], size=6)
+            addr2 = ' '.join(filter(None, [restaurant.ville, restaurant.pays]))
+            if addr2:
+                center(addr2, size=6)
+            if restaurant.telephone:
+                center(f"Tél : {restaurant.telephone}", size=6)
+            if restaurant.email:
+                center(restaurant.email[:40], size=6)
+
             sep()
-            center("REÇU DE VENTE", size=8, bold=True)
-            row("Ticket :", facture.numero_facture, size=7)
-            row("Table  :", str(facture.table.numero), size=7)
-            row("Date   :", facture.date_generation.strftime('%d/%m/%Y  %H:%M'), size=7)
+
+            # ── Détails facture ─────────────────────────────────────────
+            center("REÇU DE VENTE", size=9, bold=True)
+            row("Ticket  :", facture.numero_facture[-16:], size=7)
+            row("Table   :", str(facture.table.numero), size=7)
+            row("Date    :", facture.date_generation.strftime('%d/%m/%Y %H:%M'), size=7)
+            if facture.serveur:
+                row("Serveur :", facture.serveur.get_full_name()[:20], size=7)
             sep()
+
+            # ── Articles ────────────────────────────────────────────────
             row("Qté  Article", "Prix", size=7, bold=True)
             sep()
             for item in items:
-                row(f"{item['qte']}x {item['nom'][:20]}", f"{float(item['prix'])*item['qte']:,.0f} FCFA", size=7)
+                total_item = float(item['prix']) * item['qte']
+                label = f"{item['qte']}x {str(item['nom'])[:20]}"
+                row(label, f"{total_item:,.0f} F", size=7)
+
             sep()
-            row("TOTAL :", f"{facture.montant_paye:,.0f} FCFA", size=9, bold=True)
+
+            # ── Totaux ──────────────────────────────────────────────────
+            if facture.pourboire and float(facture.pourboire) > 0:
+                row("Sous-total :", f"{float(facture.montant_total):,.0f} F", size=7)
+                row("Pourboire  :", f"{float(facture.pourboire):,.0f} F", size=7)
+            row("TOTAL :", f"{float(facture.montant_paye):,.0f} FCFA", size=10, bold=True)
+            row("Paiement :", facture.get_mode_paiement_display(), size=7)
+
             sep()
-            center("Merci de votre visite !", size=7, bold=True)
-            center("Oresto — Restaurant Connecté", size=6)
+            center("Merci de votre visite !", size=8, bold=True)
+            center("Plateforme Oresto", size=6)
+
             p.showPage()
             p.save()
             buffer.seek(0)
+
             response = HttpResponse(buffer, content_type='application/pdf')
-            response['Content-Disposition'] = f'inline; filename="{facture.numero_facture}.pdf"'
+            response['Content-Disposition'] = (
+                f'inline; filename="facture-{facture.numero_facture}.pdf"'
+            )
             return response
+
         except ImportError:
-            return Response(InvoiceSerializer(facture).data)
+            return Response({'detail': 'ReportLab non installé'}, status=500)
+        except Exception as e:
+            return Response({'detail': f'Erreur génération PDF : {str(e)}'}, status=500)
 
 
 # ==================== NOTIFICATION ====================
@@ -437,9 +436,9 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         notif = self.get_object()
         notif.lu = True
         notif.save()
-        return Response({'status': 'lu'})
+        return Response(NotificationSerializer(notif).data)
 
     @action(detail=False, methods=['post'])
     def read_all(self, request):
         Notification.objects.filter(user=request.user, lu=False).update(lu=True)
-        return Response({'status': 'ok'})
+        return Response({'detail': 'Toutes les notifications marquées comme lues'})

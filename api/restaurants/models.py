@@ -4,23 +4,25 @@ from django.utils import timezone
 
 
 class Plan(models.Model):
-    """Plans d'abonnement Oresto"""
-    NOM_CHOICES = [
-        ('starter', 'Starter'),
-        ('pro', 'Pro'),
-        ('enterprise', 'Enterprise'),
-    ]
-    nom = models.CharField(max_length=50, choices=NOM_CHOICES, unique=True)
+    """Plans d'abonnement Oresto — différenciés par modules activés"""
+    nom = models.CharField(max_length=100, unique=True)  # Nom libre (ex: Starter, Pro, Business...)
     prix_mensuel = models.DecimalField(max_digits=10, decimal_places=2)
-    max_tables = models.PositiveIntegerField(default=10)
-    max_utilisateurs = models.PositiveIntegerField(default=5)
-    module_commandes = models.BooleanField(default=True)
-    module_stock = models.BooleanField(default=False)
     description = models.TextField(blank=True)
+
+    # ─── Modules inclus ───────────────────────────────────────────────
+    # Plan 1 : restaurant + équipe uniquement (commandes)
+    module_commandes = models.BooleanField(default=True, help_text="Module commandes, tables, facturation")
+    # Plan 2 : commandes + stock
+    module_stock = models.BooleanField(default=False, help_text="Module gestion des stocks")
+    # Plan 3 : commandes + stock + support 24h/24
+    module_support = models.BooleanField(default=False, help_text="Support prioritaire 24h/24")
+
+    is_active = models.BooleanField(default=True, help_text="Afficher ce plan sur la landing page")
 
     class Meta:
         db_table = 'plan'
         verbose_name = 'Plan'
+        ordering = ['prix_mensuel']
 
     def __str__(self):
         return f"{self.nom} — {self.prix_mensuel} FCFA/mois"
@@ -41,7 +43,7 @@ class Restaurant(models.Model):
     adresse = models.TextField(blank=True)
     ville = models.CharField(max_length=100, blank=True)
     pays = models.CharField(max_length=100, default='Bénin')
-    logo_url = models.URLField(blank=True)
+    logo_url = models.URLField(blank=True, help_text="URL publique du logo du restaurant")
     couleur_primaire = models.CharField(max_length=10, default='#C9A84C')
     statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='actif')
     plan = models.ForeignKey(Plan, on_delete=models.PROTECT, null=True, blank=True)
@@ -60,9 +62,9 @@ class Abonnement(models.Model):
     """Abonnement d'un restaurant à un plan"""
     STATUT_CHOICES = [
         ('actif', 'Actif'),
+        ('essai', 'Essai'),
         ('expiré', 'Expiré'),
         ('annulé', 'Annulé'),
-        ('essai', 'Essai gratuit'),
     ]
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name='abonnements')
     plan = models.ForeignKey(Plan, on_delete=models.PROTECT)
@@ -78,13 +80,13 @@ class Abonnement(models.Model):
         verbose_name = 'Abonnement'
         ordering = ['-date_creation']
 
-    def __str__(self):
-        return f"{self.restaurant.nom} — {self.plan.nom} ({self.statut})"
-
     @property
     def is_actif(self):
-        if self.statut != 'actif':
+        if self.statut not in ['actif', 'essai']:
             return False
         if self.date_fin and self.date_fin < timezone.now().date():
             return False
         return True
+
+    def __str__(self):
+        return f"{self.restaurant.nom} — {self.plan.nom} ({self.statut})"

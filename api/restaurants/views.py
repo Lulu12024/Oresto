@@ -1,11 +1,11 @@
 from rest_framework import viewsets, status
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from .models import Restaurant, Plan, Abonnement
 from .serializers import (
-    RestaurantSerializer, RestaurantCreateSerializer,
-    PlanSerializer, AbonnementSerializer,
+    RestaurantSerializer, RestaurantCreateSerializer, RestaurantSettingsSerializer,
+    PlanSerializer, PlanPublicSerializer, AbonnementSerializer,
 )
 
 
@@ -17,16 +17,51 @@ class IsSuperAdmin(IsAuthenticated):
         return getattr(request.user, 'is_super_admin', False) or getattr(request.user, 'is_staff', False)
 
 
+# ─── Vue publique plans (landing page) ────────────────────────────────────────
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def public_plans(request):
+    """
+    GET /api/plans/
+    Retourne les plans actifs pour la landing page — sans authentification.
+    """
+    plans = Plan.objects.filter(is_active=True).order_by('prix_mensuel')
+    return Response(PlanPublicSerializer(plans, many=True).data)
+
+
+# ─── Vue paramètres restaurant (admin du restaurant) ─────────────────────────
+
+@api_view(['GET', 'PATCH'])
+@permission_classes([IsAuthenticated])
+def my_restaurant(request):
+    """
+    GET  /api/restaurant/my/   → infos du restaurant de l'utilisateur connecté
+    PATCH /api/restaurant/my/  → modifier les infos (admin du restaurant seulement)
+    """
+    user = request.user
+    if not user.restaurant:
+        return Response({'detail': 'Aucun restaurant associé à cet utilisateur'}, status=404)
+
+    restaurant = user.restaurant
+
+    if request.method == 'GET':
+        return Response(RestaurantSettingsSerializer(restaurant).data)
+
+    # PATCH — réservé à l'administrateur du restaurant
+    role_nom = (user.role.nom if user.role else '').lower()
+    if role_nom not in ['administrateur', 'manager']:
+        return Response({'detail': 'Permission refusée'}, status=403)
+
+    serializer = RestaurantSettingsSerializer(restaurant, data=request.data, partial=True)
+    serializer.is_valid(raise_exception=True)
+    serializer.save()
+    return Response(serializer.data)
+
+
+# ─── ViewSets administration (super admin) ────────────────────────────────────
+
 class RestaurantViewSet(viewsets.ModelViewSet):
-    """
-    CRUD restaurants — réservé aux super admins Oresto
-    POST /api/admin/restaurants/           → créer restaurant + admin
-    GET  /api/admin/restaurants/           → liste tous les restaurants
-    GET  /api/admin/restaurants/{id}/      → détail
-    PUT  /api/admin/restaurants/{id}/      → modifier
-    POST /api/admin/restaurants/{id}/suspend/  → suspendre
-    POST /api/admin/restaurants/{id}/activate/ → activer
-    """
     queryset = Restaurant.objects.prefetch_related('abonnements').all()
     permission_classes = [IsSuperAdmin]
 
@@ -57,7 +92,6 @@ class RestaurantViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def stats(self, request):
-        """GET /api/admin/restaurants/stats/ → KPIs globaux"""
         from django.db.models import Count
         total = Restaurant.objects.count()
         actifs = Restaurant.objects.filter(statut='actif').count()
@@ -72,7 +106,7 @@ class RestaurantViewSet(viewsets.ModelViewSet):
 
 
 class PlanViewSet(viewsets.ModelViewSet):
-    queryset = Plan.objects.all()
+    queryset = Plan.objects.all().order_by('prix_mensuel')
     serializer_class = PlanSerializer
     permission_classes = [IsSuperAdmin]
 
@@ -91,7 +125,6 @@ class AbonnementViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def renouveler(self, request, pk=None):
-        """Renouveler un abonnement"""
         from datetime import timedelta
         from django.utils import timezone
         abo = self.get_object()

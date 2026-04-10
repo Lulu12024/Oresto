@@ -4,6 +4,7 @@ import { tablesService } from "../api/tables";
 import { ordersService } from "../api/orders";
 import { Card, Badge, Btn, Modal, Input, Select, Divider, Empty } from "../components/ui";
 import { handleApiError } from "../hooks/index";
+import QRCodeModal from "../components/QRCodeModal";
 
 const TableDetailScreen = ({ table, orders, setOrders, setTables, role, toast, plats }) => {
   const [showOrderForm,    setShowOrderForm]    = useState(false);
@@ -16,6 +17,7 @@ const TableDetailScreen = ({ table, orders, setOrders, setTables, role, toast, p
   const [payMode,          setPayMode]          = useState("Espèces");
   const [pourboire,        setPourboire]        = useState("0");
   const [loading,          setLoading]          = useState(false);
+  const [showQR,           setShowQR] = useState(false);
 
   const ORDER_NORM = {
     "LIVREE":              "LIVRÉE",
@@ -354,6 +356,15 @@ const TableDetailScreen = ({ table, orders, setOrders, setTables, role, toast, p
               💳 Régler la table
             </Btn>
           )}
+
+          <Btn
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowQR(true)}
+            style={{ fontSize: 12 }}
+          >
+            ⬛ QR Code
+          </Btn>
         </div>
       </div>
 
@@ -742,8 +753,14 @@ const TableDetailScreen = ({ table, orders, setOrders, setTables, role, toast, p
           </div>
         </div>
       </Modal>
-
+      <QRCodeModal
+        open={showQR}
+        onClose={() => setShowQR(false)}
+        table={table}
+        toast={toast}
+      />
     </div>
+    
   );
 };
 

@@ -5,7 +5,21 @@ from .models import Restaurant, Plan, Abonnement
 class PlanSerializer(serializers.ModelSerializer):
     class Meta:
         model = Plan
-        fields = '__all__'
+        fields = [
+            'id', 'nom', 'prix_mensuel', 'description',
+            'module_commandes', 'module_stock', 'module_support',
+            'is_active',
+        ]
+
+
+class PlanPublicSerializer(serializers.ModelSerializer):
+    """Sérialiseur public pour la landing page — moins d'infos exposées"""
+    class Meta:
+        model = Plan
+        fields = [
+            'id', 'nom', 'prix_mensuel', 'description',
+            'module_commandes', 'module_stock', 'module_support',
+        ]
 
 
 class AbonnementSerializer(serializers.ModelSerializer):
@@ -42,6 +56,17 @@ class RestaurantSerializer(serializers.ModelSerializer):
         return obj.users.filter(is_activite=True).count()
 
 
+class RestaurantSettingsSerializer(serializers.ModelSerializer):
+    """Sérialiseur pour les paramètres modifiables par l'admin du restaurant"""
+    class Meta:
+        model = Restaurant
+        fields = [
+            'id', 'nom', 'email', 'telephone', 'adresse', 'ville', 'pays',
+            'logo_url', 'couleur_primaire',
+        ]
+        read_only_fields = ['id']
+
+
 class RestaurantCreateSerializer(serializers.ModelSerializer):
     """Crée un restaurant + son admin en une seule requête"""
     # Champs admin
@@ -50,6 +75,11 @@ class RestaurantCreateSerializer(serializers.ModelSerializer):
     admin_first_name = serializers.CharField(write_only=True)
     admin_last_name = serializers.CharField(write_only=True)
     admin_email = serializers.EmailField(write_only=True, required=False, allow_blank=True)
+    # Infos restaurant pour entête facture
+    telephone = serializers.CharField(required=False, allow_blank=True, default='')
+    adresse = serializers.CharField(required=False, allow_blank=True, default='')
+    ville = serializers.CharField(required=False, allow_blank=True, default='')
+    logo_url = serializers.URLField(required=False, allow_blank=True, default='')
     # Plan initial
     plan_id = serializers.IntegerField(write_only=True, required=False)
 
@@ -57,7 +87,7 @@ class RestaurantCreateSerializer(serializers.ModelSerializer):
         model = Restaurant
         fields = [
             'nom', 'slug', 'email', 'telephone', 'adresse', 'ville', 'pays',
-            'couleur_primaire',
+            'logo_url', 'couleur_primaire',
             'admin_login', 'admin_password', 'admin_first_name', 'admin_last_name', 'admin_email',
             'plan_id',
         ]
@@ -82,26 +112,32 @@ class RestaurantCreateSerializer(serializers.ModelSerializer):
         plan_id = validated_data.pop('plan_id', None)
 
         # Créer le restaurant
-        plan = Plan.objects.get(id=plan_id) if plan_id else None
-        restaurant = Restaurant.objects.create(plan=plan, **validated_data)
+        restaurant = Restaurant.objects.create(**validated_data)
 
-        # Créer l'abonnement initial (essai)
-        if plan:
-            from django.utils import timezone
-            from datetime import timedelta
-            Abonnement.objects.create(
-                restaurant=restaurant,
-                plan=plan,
-                statut='essai',
-                date_debut=timezone.now().date(),
-                date_fin=timezone.now().date() + timedelta(days=30),
-            )
+        # Associer le plan
+        if plan_id:
+            try:
+                plan = Plan.objects.get(id=plan_id)
+                restaurant.plan = plan
+                restaurant.save()
+                # Créer l'abonnement
+                from django.utils import timezone
+                import datetime
+                Abonnement.objects.create(
+                    restaurant=restaurant,
+                    plan=plan,
+                    statut='essai',
+                    date_debut=timezone.now().date(),
+                    date_fin=timezone.now().date() + datetime.timedelta(days=30),
+                )
+            except Plan.DoesNotExist:
+                pass
 
-        # Créer le compte administrateur du restaurant
+        # Créer l'admin du restaurant
         try:
-            role = Role.objects.get(nom='Administrateur')
+            role_admin = Role.objects.get(nom='Administrateur')
         except Role.DoesNotExist:
-            role = Role.objects.filter(nom__icontains='admin').first()
+            role_admin = Role.objects.filter(nom__icontains='admin').first()
 
         User.objects.create_user(
             login=admin_login,
@@ -109,7 +145,9 @@ class RestaurantCreateSerializer(serializers.ModelSerializer):
             first_name=admin_first_name,
             last_name=admin_last_name,
             email=admin_email,
-            role=role,
+            role=role_admin,
             restaurant=restaurant,
+            is_activite=True,
         )
+
         return restaurant
