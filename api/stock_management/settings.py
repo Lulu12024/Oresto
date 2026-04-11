@@ -167,4 +167,4 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # ── QR Code settings ──────────────────────────────────────────────────
 QR_CODE_SIZE = 200  # px
-FRONTEND_URL = os.environ.get('FRONTEND_URL', 'https://oresto-front.onrender.com/')
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'https://oresto-front.onrender.com')
