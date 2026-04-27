@@ -30,7 +30,7 @@ import PlatsScreen        from "./screens/PlatsScreen";
 import DemandesScreen     from "./screens/DemandesScreen";
 import ImportScreen       from "./screens/ImportScreen";
 import SettingsScreen     from "./screens/SettingsScreen";
-
+import RegisterScreen     from "./screens/RegisterScreen";
 import Sidebar from "./components/Sidebar";
 import Header  from "./components/Header";
 // OfflineBanner EST DANS ./components/ui — pas de fichier séparé
@@ -155,9 +155,24 @@ function MainApp() {
   , [orders, products]);
 
   // ── Vues sans auth ────────────────────────────────────────────────────
+  
   if (appView === "landing") return (
     <>
-      <LandingPage onGoToLogin={() => setAppView("login")} />
+      <LandingPage
+        onGoToLogin={() => setAppView("login")}
+        onGoToRegister={() => setAppView("register")}
+      />
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+    </>
+  );
+ 
+  if (appView === "register") return (
+    <>
+      <RegisterScreen
+        onGoToLogin={() => setAppView("login")}
+        onBack={() => setAppView("landing")}
+        toast={toast}
+      />
       <ToastContainer toasts={toasts} removeToast={removeToast} />
     </>
   );

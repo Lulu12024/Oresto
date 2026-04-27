@@ -45,7 +45,7 @@ function buildPlanFeatures(plan) {
 /** Couleur par position dans la liste des plans */
 const PLAN_COLORS = [C.info, C.gold, C.purple];
 
-export default function LandingPage({ onGoToLogin }) {
+export default function LandingPage({ onGoToLogin , onGoToRegister }) {
   const [scrolled, setScrolled] = useState(false);
   const [plans, setPlans]       = useState([]);
   const [plansLoading, setPlansLoading] = useState(true);
@@ -151,7 +151,7 @@ export default function LandingPage({ onGoToLogin }) {
           </p>
 
           <div style={{ display: "flex", gap: 16, justifyContent: "center", flexWrap: "wrap" }}>
-            <Btn onClick={onGoToLogin} style={{ padding: "14px 32px", fontSize: 15 }}>
+            <Btn onClick={onGoToRegister} style={{ padding: "14px 32px", fontSize: 15 }}>
               Commencer l'essai gratuit →
             </Btn>
             <Btn variant="outline" style={{ padding: "14px 32px", fontSize: 15 }}>
@@ -215,7 +215,7 @@ export default function LandingPage({ onGoToLogin }) {
               Des offres pour chaque restaurant
             </h2>
             <p style={{ fontSize: 14, color: C.muted, marginTop: 12 }}>
-              Essai gratuit 15 jours sur tous les plans. Sans engagement.
+              Essai gratuit 30 jours sur tous les plans. Sans engagement.
             </p>
           </div>
 
@@ -294,7 +294,7 @@ export default function LandingPage({ onGoToLogin }) {
 
                     <Btn
                       variant={popular ? "primary" : "outline"}
-                      onClick={onGoToLogin}
+                      onClick={onGoToRegister}
                       style={{ width: "100%", justifyContent: "center" }}
                     >
                       Commencer l'essai
@@ -317,9 +317,9 @@ export default function LandingPage({ onGoToLogin }) {
           Prêt à connecter votre restaurant ?
         </h2>
         <p style={{ fontSize: 16, color: "rgba(255,255,255,0.7)", marginBottom: 40, maxWidth: 500, margin: "0 auto 40px" }}>
-          Essai gratuit 15 jours, sans carte bancaire. Démarrez en moins de 5 minutes.
+          Essai gratuit 30 jours, sans carte bancaire. Démarrez en moins de 5 minutes.
         </p>
-        <Btn onClick={onGoToLogin} style={{ padding: "16px 40px", fontSize: 16 }}>
+        <Btn onClick={onGoToRegister} style={{ padding: "16px 40px", fontSize: 16 }}>
           Démarrer gratuitement →
         </Btn>
       </section>

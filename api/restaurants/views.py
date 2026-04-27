@@ -7,7 +7,9 @@ from .serializers import (
     RestaurantSerializer, RestaurantCreateSerializer, RestaurantSettingsSerializer,
     PlanSerializer, PlanPublicSerializer, AbonnementSerializer,
 )
-
+import os
+from django.core.files.storage import default_storage
+from django.core.files.base import ContentFile
 
 class IsSuperAdmin(IsAuthenticated):
     """Permission : uniquement les super admins de la plateforme"""
@@ -59,6 +61,80 @@ def my_restaurant(request):
     return Response(serializer.data)
 
 
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def register_restaurant(request):
+    """
+    POST /api/auth/register/
+    Auto-inscription d'un restaurant depuis la landing page.
+    Crée le restaurant + l'administrateur en une seule requête.
+    """
+    serializer = RestaurantCreateSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+ 
+    essai_gratuit = request.data.get('essai_gratuit', True)
+ 
+    restaurant = serializer.save()
+ 
+    # Si essai gratuit forcé et pas de plan → créer abonnement essai sur le 1er plan actif
+    if essai_gratuit and not restaurant.plan:
+        from django.utils import timezone
+        import datetime
+        premier_plan = Plan.objects.filter(is_active=True).order_by('prix_mensuel').first()
+        if premier_plan:
+            restaurant.plan = premier_plan
+            restaurant.save()
+            Abonnement.objects.get_or_create(
+                restaurant=restaurant,
+                defaults=dict(
+                    plan=premier_plan,
+                    statut='essai',
+                    date_debut=timezone.now().date(),
+                    date_fin=timezone.now().date() + datetime.timedelta(days=30),
+                )
+            )
+ 
+    return Response({
+        'detail': 'Restaurant créé avec succès',
+        'slug':   restaurant.slug,
+        'nom':    restaurant.nom,
+    }, status=status.HTTP_201_CREATED)
+ 
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])  # AllowAny pour l'inscription, sinon IsAuthenticated
+def upload_logo(request):
+    """
+    POST /api/upload/logo/
+    Reçoit un fichier image et retourne son URL publique.
+    Accepte : PNG, JPG, JPEG, WEBP — max 2 Mo
+    """
+    file = request.FILES.get('logo')
+    if not file:
+        return Response({'detail': 'Aucun fichier fourni'}, status=400)
+ 
+    # Vérification type
+    ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp']
+    if file.content_type not in ALLOWED_TYPES:
+        return Response({'detail': 'Format non supporté. Utilisez PNG, JPG ou WEBP'}, status=400)
+ 
+    # Vérification taille (2 Mo max)
+    if file.size > 2 * 1024 * 1024:
+        return Response({'detail': 'Fichier trop lourd (max 2 Mo)'}, status=400)
+ 
+    # Nom de fichier sécurisé + unique
+    import uuid
+    ext = os.path.splitext(file.name)[1].lower()
+    filename = f"logos/{uuid.uuid4().hex}{ext}"
+ 
+    # Sauvegarde
+    saved_path = default_storage.save(filename, ContentFile(file.read()))
+    file_url = request.build_absolute_uri(f'/media/{saved_path}')
+ 
+    return Response({'url': file_url}, status=201)
+ 
 # ─── ViewSets administration (super admin) ────────────────────────────────────
 
 class RestaurantViewSet(viewsets.ModelViewSet):

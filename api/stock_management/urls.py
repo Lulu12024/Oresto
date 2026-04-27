@@ -16,7 +16,7 @@ from audit.views import AuditLogViewSet, RapportViewSet, FormatExportViewSet
 from audit.reports import ReportsViewSet
 
 # Restaurant views
-from restaurants.views import public_plans, my_restaurant
+from restaurants.views import public_plans, my_restaurant, register_restaurant, upload_logo
 
 # ==================== ROUTER ====================
 
@@ -45,7 +45,8 @@ urlpatterns = [
     path('api/auth/logout/',          logout,          name='logout'),
     path('api/auth/me/',              me,              name='me'),
     path('api/auth/change-password/', change_password, name='change-password'),
-
+    path('api/auth/register/', register_restaurant, name='register-restaurant'),
+    path('api/upload/logo/', upload_logo, name='upload-logo'),
     # ── API REST principale (filtrée par restaurant de l'user) ────────
     path('api/', include(router.urls)),
 
@@ -64,4 +65,7 @@ urlpatterns = [
     # ── Schéma / Swagger ─────────────────────────────────────────────
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/',   SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
-] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+] 
+if settings.DEBUG:
+    urlpatterns += static(
+        settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { C } from "../styles/tokens";
 import { Card, Btn, Input, Spinner } from "../components/ui";
 import { api } from "../api/client";
+import LogoUpload from "../components/LogoUpload";
 
 /**
  * SettingsScreen — Paramètres du restaurant
@@ -103,38 +104,15 @@ const SettingsScreen = ({ toast, user, setUser }) => {
         <h3 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 20 }}>
           Logo du restaurant
         </h3>
-        <div style={{ display: "flex", gap: 20, alignItems: "flex-start", flexWrap: "wrap" }}>
-          {/* Prévisualisation */}
-          <div style={{
-            width: 96, height: 96, borderRadius: 12,
-            border: `1.5px solid ${C.border}`,
-            background: C.bg1,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            overflow: "hidden", flexShrink: 0,
-          }}>
-            {form.logo_url ? (
-              <img
-                src={form.logo_url}
-                alt="Logo"
-                style={{ width: "100%", height: "100%", objectFit: "contain" }}
-                onError={e => { e.target.style.display = "none"; }}
-              />
-            ) : (
-              <span style={{ fontSize: 32 }}>🍽</span>
-            )}
-          </div>
-          <div style={{ flex: 1, minWidth: 200 }}>
-            <Input
-              label="URL du logo (lien public)"
-              value={form.logo_url}
-              onChange={v => upd("logo_url", v)}
-              placeholder="https://exemple.com/logo.png"
-            />
-            <p style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>
-              Utilisez un lien image public (PNG, JPG). Le logo s'affichera en haut de chaque facture PDF.
-            </p>
-          </div>
-        </div>
+        <LogoUpload
+          label=""
+          value={form.logo_url}
+          onChange={url => upd("logo_url", url)}
+          size={100}
+        />
+        <p style={{ fontSize: 11, color: C.muted, marginTop: 10 }}>
+          Le logo s'affichera dans votre espace, dans le header et sur les factures PDF.
+        </p>
       </Card>
 
       {/* ── Infos principales ────────────────────────────────────────── */}
