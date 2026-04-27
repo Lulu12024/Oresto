@@ -136,18 +136,7 @@ export default function LandingPage({ onGoToLogin }) {
         }} />
 
         <div className="anim-fadeUp" style={{ textAlign: "center", maxWidth: 780, position: "relative" }}>
-          <div style={{
-            display: "inline-flex", alignItems: "center", gap: 8,
-            background: C.goldBg || "rgba(201,168,76,0.1)",
-            border: `1px solid ${C.goldBorder || C.gold}`,
-            borderRadius: 24, padding: "6px 16px", marginBottom: 32,
-          }}>
-            <span style={{ fontSize: 14 }}>✨</span>
-            <span style={{ fontSize: 12, color: C.goldD || C.gold, fontWeight: 600, letterSpacing: 1 }}>
-              La plateforme SaaS pour restaurants connectés
-            </span>
-          </div>
-
+         
           <h1 className="serif" style={{
             fontSize: "clamp(2.4rem, 6vw, 4rem)",
             fontWeight: 700, color: C.text, lineHeight: 1.15, marginBottom: 24,
@@ -157,7 +146,7 @@ export default function LandingPage({ onGoToLogin }) {
           </h1>
 
           <p style={{ fontSize: 17, color: C.textSub, lineHeight: 1.7, maxWidth: 580, margin: "0 auto 40px" }}>
-            Du QR code sur chaque table jusqu'à la facture finale — Oresto centralise
+            Du QR code sur chaque table jusqu'à la facture finale, Oresto centralise
             commandes, stocks et équipes en temps réel.
           </p>
 
@@ -165,11 +154,14 @@ export default function LandingPage({ onGoToLogin }) {
             <Btn onClick={onGoToLogin} style={{ padding: "14px 32px", fontSize: 15 }}>
               Commencer l'essai gratuit →
             </Btn>
-            <a href="#fonctionnalités" style={{ textDecoration: "none" }}>
+            <Btn variant="outline" style={{ padding: "14px 32px", fontSize: 15 }}>
+                Demander une Démo
+              </Btn>
+            {/* <a href="#fonctionnalités" style={{ textDecoration: "none" }}>
               <Btn variant="outline" style={{ padding: "14px 32px", fontSize: 15 }}>
                 Voir les fonctionnalités
               </Btn>
-            </a>
+            </a> */}
           </div>
         </div>
       </section>
@@ -223,7 +215,7 @@ export default function LandingPage({ onGoToLogin }) {
               Des offres pour chaque restaurant
             </h2>
             <p style={{ fontSize: 14, color: C.muted, marginTop: 12 }}>
-              Essai gratuit 30 jours sur tous les plans. Sans engagement.
+              Essai gratuit 15 jours sur tous les plans. Sans engagement.
             </p>
           </div>
 
@@ -325,7 +317,7 @@ export default function LandingPage({ onGoToLogin }) {
           Prêt à connecter votre restaurant ?
         </h2>
         <p style={{ fontSize: 16, color: "rgba(255,255,255,0.7)", marginBottom: 40, maxWidth: 500, margin: "0 auto 40px" }}>
-          Essai gratuit 30 jours, sans carte bancaire. Démarrez en moins de 5 minutes.
+          Essai gratuit 15 jours, sans carte bancaire. Démarrez en moins de 5 minutes.
         </p>
         <Btn onClick={onGoToLogin} style={{ padding: "16px 40px", fontSize: 16 }}>
           Démarrer gratuitement →

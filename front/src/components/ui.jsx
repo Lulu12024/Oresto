@@ -1,34 +1,30 @@
 import { useState } from "react";
 import { C } from "../styles/tokens";
 
+
 /* ══════════════════════════════════════
    LOGO ORESTO — SVG dynamique
    ══════════════════════════════════════ */
 export const OrestoLogo = ({ size = 40, withText = true, dark = false }) => (
   <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-    <svg width={size} height={size} viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="24" cy="24" r="20" fill={C.gold} opacity="0.15"/>
-      <circle cx="24" cy="24" r="20" stroke={C.gold} strokeWidth="2" fill="none"/>
-      <path d="M12 28 Q24 12 36 28" stroke={C.gold} strokeWidth="2.5" fill="none" strokeLinecap="round"/>
-      <line x1="16" y1="33" x2="32" y2="33" stroke={C.gold} strokeWidth="2.5" strokeLinecap="round"/>
-      <circle cx="24" cy="8" r="2" fill={C.gold}/>
-      <circle cx="38" cy="16" r="1.5" fill={C.gold} opacity="0.7"/>
-      <circle cx="10" cy="16" r="1.5" fill={C.gold} opacity="0.7"/>
-      <line x1="24" y1="10" x2="26" y2="14" stroke={C.gold} strokeWidth="1" opacity="0.5"/>
-      <line x1="37" y1="18" x2="34" y2="21" stroke={C.gold} strokeWidth="1" opacity="0.5"/>
-      <line x1="11" y1="18" x2="14" y2="21" stroke={C.gold} strokeWidth="1" opacity="0.5"/>
-    </svg>
+    <img
+      src="/logo-oresto.png"
+      alt="Oresto"
+      style={{
+        height: size,
+        width: "auto",
+        objectFit: "contain",
+      }}
+    />
     {withText && (
-      <div>
-        <div className="serif" style={{
-          fontSize: size * 0.5, fontWeight: 700,
-          color: dark ? C.text : C.goldD,
-          letterSpacing: 3, lineHeight: 1,
-        }}>ORESTO</div>
-        <div style={{
-          fontSize: size * 0.2, color: C.muted,
-          letterSpacing: 2.5, textTransform: "uppercase", marginTop: 2,
-        }}>Restaurant Connecté</div>
+      <div className="serif" style={{
+        fontSize: size * 0.5,
+        fontWeight: 700,
+        color: dark ? "#fff" : C.goldD,
+        letterSpacing: 2,
+        lineHeight: 1,
+      }}>
+        ORESTO
       </div>
     )}
   </div>

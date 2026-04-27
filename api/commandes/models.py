@@ -189,6 +189,34 @@ class Facture(models.Model):
     def __str__(self):
         return self.numero_facture
 
+    @property
+    def invoice_id(self):
+        """Retourne l'ID formaté de la facture (BDC-YYYY-XXXX)"""
+        return self.numero_facture
+
+    def save(self, *args, **kwargs):
+        """Génère automatiquement un numéro de facture si absent"""
+        if not self.numero_facture:
+            from datetime import datetime
+            now = datetime.now()
+            year = now.strftime('%Y')
+            month = now.strftime('%m')
+            prefix = f'BDC-{year}-{month}'
+
+            last_facture = Facture.objects.filter(
+                numero_facture__startswith=prefix
+            ).order_by('-numero_facture').first()
+
+            if last_facture:
+                last_num = int(last_facture.numero_facture.split('-')[-1])
+                new_num = last_num + 1
+            else:
+                new_num = 1
+
+            self.numero_facture = f'{prefix}-{new_num:03d}'
+
+        super().save(*args, **kwargs)
+
     def get_mode_paiement_display(self):
         return dict(self.MODE_CHOICES).get(self.mode_paiement, self.mode_paiement)
 
